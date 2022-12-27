@@ -1,0 +1,10 @@
+node_modules
+.wwebjs_auth
+*.log
+logs/error.log
+logs/combined.log
+clients/wpClients
+logs/error.log
+logs/combined.log
+clients/wpClients
+storage/*
