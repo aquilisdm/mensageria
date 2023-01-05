@@ -1,8 +1,7 @@
 const { Client, LegacySessionAuth, LocalAuth } = require("whatsapp-web.js");
 const qrcode = require("qrcode-terminal");
+const Logger = require("../../logic/Logger");
 const ClientManager = require("../Client/ClientManager");
-const WinstonLogger = require("../../winston_logger");
-WinstonLogger.init();
 var clientMap = {};
 
 function establishOrCreateConnection(clientId) {
@@ -11,22 +10,18 @@ function establishOrCreateConnection(clientId) {
       clientMap[clientId] = ClientManager.createClientSession(clientId);
 
       clientMap[clientId].on("disconnected", () => {
-        WinstonLogger.logger.log("info", {
-          level: "info",
-          clientId: clientId,
-          message: clientId + " has been disconnected",
-          date: new Date().toUTCString(),
-        });
-
+        Logger.info(
+          clientId + " has been disconnected",
+          "MessageService.establishOrCreateConnection()"
+        );
         clientMap[clientId] = undefined;
       });
 
       clientMap[clientId].on("auth_failure", () => {
-        WinstonLogger.logger.log("error", {
-          level: "error",
-          message: clientId + " authentication failed",
-          date: new Date().toUTCString(),
-        });
+        Logger.error(
+          clientId + " authentication failed",
+          "MessageService.establishOrCreateConnection()"
+        );
       });
 
       try {
@@ -202,12 +197,7 @@ const MessageService = {
           //Save the connection
           clientMap[uniqueRandomID] = client;
           //client.destroy();
-          WinstonLogger.logger.log("info", {
-            level: "info",
-            message: client.info,
-            connection: true,
-            date: new Date().toUTCString(),
-          });
+          Logger.info(client.info, "MessageService.authenticate()");
           callback({ ready: true, clientId: uniqueRandomID });
         });
 

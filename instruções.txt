@@ -1,5 +1,12 @@
-# Atenção: Toda vez que um novo endpoint for adicionado em uma das API's (simw ou mensageria)
-# vai ser necessario executar o script "map_automation.py" para atualizar o mapeamento.
+# Link para o proxy
+https://drive.google.com/drive/folders/1iu3KCWMwuOSmrohJN4uE62CaJwCihSmF?usp=share_link
+# Atenção: Lembre-se que é necessario iniciar o proxy (bait-proxy) para aceitar requests nas API's do simw e mensageria
 
 # Iniciar Servidor 
-sudo screen -d -m -S bait-proxy node index.js
+sudo screen -d -m -S wpmsg node index.js
+
+# Configurar cronjob para verificar o servidor periodicamente
+sudo crontab -e
+# Configurar task (no arquivo do crontab)
+*/15  * * * * /mnt/prod/wpmessager/check_server_health_job.sh
+@reboot /mnt/prod/wpmessager/check_server_health_job.sh

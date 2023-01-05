@@ -2,13 +2,12 @@ const express = require("express");
 const router = express.Router();
 const Authentication = require("../../logic/Authentication");
 const MessageService = require("./MessageService.js");
-const WinstonLogger = require("../../winston_logger");
+const Logger = require("../../logic/Logger");
 const { RateLimiterMemory } = require("rate-limiter-flexible");
 const opts = {
   points: 1200, // 1200 points
   duration: 1, // Per second
 };
-WinstonLogger.init();
 
 function writeServerSendEvent(res, sseId, data) {
   res.write("id: " + sseId + "\n");
@@ -35,12 +34,7 @@ router.post("/logout", function (req, res, next) {
       return res.json({ success: true });
     })
     .catch((err) => {
-      console.log(err);
-      WinstonLogger.logger.log("error", {
-        level: "error",
-        message: err,
-        date: new Date().toUTCString(),
-      });
+      Logger.error(err, "/messages/logout");
       return res.json({ success: false });
     });
 });
@@ -63,18 +57,16 @@ router.get(
             return res.json(info);
           })
           .catch((err) => {
-            console.log(err);
-            WinstonLogger.logger.log("error", {
-              level: "error",
-              message: err,
-              date: new Date().toUTCString(),
-              endpoint: "/messages/deviceInfo",
-            });
+            Logger.error(err, "/messages/deviceInfo");
             return res.json({ success: false, message: err });
           });
       })
       .catch((rateLimiterRes) => {
         // Not enough points to consume
+        Logger.info(
+          "Address: " + ip + " - " + rateLimiterRes,
+          "/messages/deviceInfo"
+        );
         return res.status(204).json({
           success: false,
           message: "Too many requests",
@@ -113,12 +105,7 @@ router.get(
       })
       .catch((err) => {
         console.log(err);
-        WinstonLogger.logger.log("error", {
-          level: "error",
-          message: err,
-          date: new Date().toUTCString(),
-          endpoint: "/messages/getUserChatMessagesByChatId",
-        });
+        Logger.info(err, "/messages/getUserChatMessagesByChatId");
         return res.json([]);
       });
   }
@@ -141,16 +128,15 @@ router.get("/getUserChats/:clientId", function (req, res, next) {
         })
         .catch((err) => {
           console.log(err);
-          WinstonLogger.logger.log("error", {
-            level: "error",
-            message: err,
-            date: new Date().toUTCString(),
-            endpoint: "/messages/getCurrentUserChats",
-          });
+          Logger.info(err, "/messages/getCurrentUserChats");
           return res.json([]);
         });
     })
     .catch((rateLimiterRes) => {
+      Logger.info(
+        "Address: " + ip + " - " + rateLimiterRes,
+        "/messages/getCurrentUserChats"
+      );
       // Not enough points to consume
       return res.status(204).json({
         success: false,
@@ -186,31 +172,21 @@ router.post(
             });
           })
           .catch((err) => {
-            WinstonLogger.logger.log("error", {
-              level: "error",
-              message: err,
-              number:
-                req.body.number !== undefined &&
-                req.body.number + "".length < 500
-                  ? req.body.number
-                  : "0",
-              clientId:
-                req.body.clientId !== undefined &&
-                req.body.clientId + "".length < 500
-                  ? req.body.clientId
-                  : "0",
-              messageContent: req.body.message,
-              date: new Date().toUTCString(),
-              endpoint: "/messages/sendTextMessage",
-            });
+            console.log(err);
+            Logger.info(err, "/messages/sendTextMessage");
 
             return res.json({
               success: false,
-              message: "Message could not be sent due to internal error",
+              message:
+                "Message could not be sent due to internal error, please check the logs for more details",
             });
           });
       })
       .catch((rateLimiterRes) => {
+        Logger.info(
+          "Address: " + ip + " - " + rateLimiterRes,
+          "/messages/sendTextMessage"
+        );
         // Not enough points to consume
         return res.status(204).json({
           success: false,
