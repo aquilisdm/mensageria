@@ -6,7 +6,7 @@ const WinstonLogger = require("../../winston_logger");
 const { RateLimiterMemory } = require("rate-limiter-flexible");
 const opts = {
   points: 1200, // 1200 points
-  duration: 2, // Per second
+  duration: 1, // Per second
 };
 WinstonLogger.init();
 
@@ -186,7 +186,6 @@ router.post(
             });
           })
           .catch((err) => {
-            console.log(err);
             WinstonLogger.logger.log("error", {
               level: "error",
               message: err,

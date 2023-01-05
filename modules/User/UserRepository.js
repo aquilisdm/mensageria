@@ -17,7 +17,6 @@ const UserRepository = {
           resolve(findResult);
         })
         .catch((err) => {
-          console.log(`Error worth logging: ${err}`);
           WinstonLogger.logger.log("error", {
             level: "error",
             message: err,
@@ -40,7 +39,6 @@ const UserRepository = {
           resolve(findResult);
         })
         .catch((err) => {
-          console.log(`Error worth logging: ${err}`);
           WinstonLogger.logger.log("error", {
             level: "error",
             message: err,
@@ -63,7 +61,6 @@ const UserRepository = {
           resolve(findResult);
         })
         .catch((err) => {
-          console.log(`Error worth logging: ${err}`);
           WinstonLogger.logger.log("error", {
             level: "error",
             message: err,
@@ -93,7 +90,6 @@ const UserRepository = {
           resolve({ success: true });
         })
         .catch((err) => {
-          console.log(`Error worth logging: ${err}`);
           WinstonLogger.logger.log("error", {
             level: "error",
             message: err,

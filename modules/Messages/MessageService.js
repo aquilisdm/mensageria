@@ -94,18 +94,19 @@ const MessageService = {
       }
     });
   },
-  getChatMessagesByChatId: function (clientId,chatId) {
+  getChatMessagesByChatId: function (clientId, chatId) {
     return new Promise(async (resolve, reject) => {
       if (await establishOrCreateConnection(clientId)) {
-        
         clientMap[clientId]
           .getChatById(chatId)
           .then(async (chat) => {
-            if(chat!==null) {
-              let messages = await chat.fetchMessages({fromMe:false,limit:200});
+            if (chat !== null) {
+              let messages = await chat.fetchMessages({
+                fromMe: false,
+                limit: 200,
+              });
               resolve(messages);
-            }
-            else {
+            } else {
               console.log("No chat with this id was found");
               resolve([]);
             }
@@ -115,7 +116,9 @@ const MessageService = {
             resolve([]);
           });
       } else {
-        console.log("Connection could not be established at getChatMessagesByChatId");
+        console.log(
+          "Connection could not be established at getChatMessagesByChatId"
+        );
         resolve([]);
       }
     });
@@ -188,8 +191,8 @@ const MessageService = {
         });
 
         client.on("ready", () => {
-          console.log("Client is ready!");
-          console.log("ID: " + uniqueRandomID);
+          //console.log("Client is ready!");
+          //console.log("ID: " + uniqueRandomID);
           ClientManager.setClientId(
             uniqueRandomID,
             client.info !== undefined ? client.info : {},

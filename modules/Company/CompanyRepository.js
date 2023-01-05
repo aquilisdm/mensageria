@@ -2,22 +2,18 @@ const uuid = require("uuid");
 const MongoDB = require("../../logic/MongoDB");
 
 const CompanyRepository = {
-
-  getCompanyById: function(id) {
+  getCompanyById: function (id) {
     return new Promise((resolve, reject) => {
       MongoDB.getDatabase()
         .then(async (client) => {
           const database = client.db(MongoDB.dbName);
           const collection = database.collection("companies");
-          const findResult = await collection.find({id:id}).toArray();
+          const findResult = await collection.find({ id: id }).toArray();
 
           client.close();
           resolve(findResult);
         })
         .catch((err) => {
-          if (error instanceof MongoServerError) {
-            console.log(`Error worth logging: ${error}`);
-          }
           reject(err);
         });
     });
@@ -34,9 +30,6 @@ const CompanyRepository = {
           resolve(findResult);
         })
         .catch((err) => {
-          if (error instanceof MongoServerError) {
-            console.log(`Error worth logging: ${error}`); // special case for some reason
-          }
           reject(err);
         });
     });
@@ -53,7 +46,7 @@ const CompanyRepository = {
 
           if (findResult !== null && findResult.length <= 0) {
             await collection.insertOne({ id: id, name: name });
-            resolve({success: true});
+            resolve({ success: true });
           } else {
             resolve({
               success: false,
@@ -65,10 +58,6 @@ const CompanyRepository = {
           resolve({ success: true });
         })
         .catch((error) => {
-          if (error instanceof MongoServerError) {
-            console.log(`Error worth logging: ${error}`); // special case for some reason
-          }
-
           resolve({ success: false, message: err });
         });
     });
