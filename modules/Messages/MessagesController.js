@@ -3,6 +3,8 @@ const router = express.Router();
 const Authentication = require("../../logic/Authentication");
 const MessageService = require("./MessageService.js");
 const Logger = require("../../logic/Logger");
+const EventEmitter = require("events");
+var eventEmitter = new EventEmitter();
 const { RateLimiterMemory } = require("rate-limiter-flexible");
 const opts = {
   points: 1200, // 1200 points
@@ -186,6 +188,46 @@ router.post(
         Logger.info(
           "Address: " + ip + " - " + rateLimiterRes,
           "/messages/sendTextMessage"
+        );
+        // Not enough points to consume
+        return res.status(204).json({
+          success: false,
+          message: "Too many requests",
+        });
+      });
+  }
+);
+
+router.post(
+  "/addTextMessageToQueue",
+  Authentication.verifyTokenMiddleware,
+  function (req, res, next) {
+    var ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+    if (ip == undefined || ip == null) {
+      ip = req.headers["x-access-token"];
+    }
+
+    const rateLimiter = new RateLimiterMemory(opts);
+
+    rateLimiter
+      .consume(ip, 1) // consume 1 point
+      .then((rateLimiterRes) => {
+        eventEmitter.emit("addMessage", {
+          clientId: req.body.clientId,
+          number: req.body.number,
+          message: req.body.message,
+          ip: ip,
+        });
+
+        return res.json({
+          success: true,
+          message: "Your message was added to the queue",
+        });
+      })
+      .catch((rateLimiterRes) => {
+        Logger.info(
+          "Address: " + ip + " - " + rateLimiterRes,
+          "/messages/addTextMessageToQueue"
         );
         // Not enough points to consume
         return res.status(204).json({

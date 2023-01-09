@@ -8,7 +8,10 @@ const UserController = require("./modules/User/UserController");
 const ConfigController = require("./modules/Config/ConfigController");
 const CompanyController = require("./modules/Company/CompanyController");
 const cors = require("cors");
-var LocalStorage = require("node-localstorage").LocalStorage;
+const EventEmitter = require("events");
+const MessageDispatcher = require("./service/MessageDispatcher");
+var eventEmitter = new EventEmitter();
+
 //nvm use v14.10.0
 //https://docs.wwebjs.dev/Client.html#getChats
 //https://wwebjs.dev/guide/#first-steps
@@ -62,9 +65,7 @@ app.use("/wp-users", UserController);
 app.use("/wp-config", ConfigController);
 app.use("/wp-company", CompanyController);
 
-/**
- * Event listener for HTTP server "listening" event.
- */
 app.listen(2000, function () {
   console.log("Starting server on", 2000);
+  MessageDispatcher.start();
 });
