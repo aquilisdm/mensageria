@@ -1,18 +1,21 @@
 const MongoDB = require("./MongoDB");
 
 const Logger = {
-  error: function (err, location) {
+  message: function (message,status) {
     return new Promise(async (resolve, reject) => {
       MongoDB.getDatabase()
         .then(async (client) => {
           const database = client.db(MongoDB.dbName);
-          const collection = database.collection("logs");
+          const collection = database.collection("message_logs");
 
           await collection.insertOne({
-            level: "error",
-            message: err,
-            endpoint: location,
-            date: new Date().toUTCString(),
+            level: "message",
+            clientId:message.clientId,
+            message: message.message,
+            number:message.number,
+            ip: message.ip,
+            status: status,
+            date: new Date().toISOString(),
           });
 
           client.close();
@@ -24,7 +27,30 @@ const Logger = {
         });
     });
   },
-  info: function (info,location) {
+  error: function (err, location) {
+    return new Promise(async (resolve, reject) => {
+      MongoDB.getDatabase()
+        .then(async (client) => {
+          const database = client.db(MongoDB.dbName);
+          const collection = database.collection("logs");
+
+          await collection.insertOne({
+            level: "error",
+            message: err,
+            endpoint: location,
+            date: new Date().toISOString(),
+          });
+
+          client.close();
+          resolve(true);
+        })
+        .catch((err) => {
+          console.log(err);
+          resolve(false);
+        });
+    });
+  },
+  info: function (info, location) {
     return new Promise(async (resolve, reject) => {
       MongoDB.getDatabase()
         .then(async (client) => {
@@ -35,7 +61,7 @@ const Logger = {
             level: "info",
             message: info,
             endpoint: location,
-            date: new Date().toUTCString(),
+            date: new Date().toISOString(),
           });
 
           client.close();

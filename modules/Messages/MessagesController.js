@@ -3,8 +3,6 @@ const router = express.Router();
 const Authentication = require("../../logic/Authentication");
 const MessageService = require("./MessageService.js");
 const Logger = require("../../logic/Logger");
-const EventEmitter = require("events");
-var eventEmitter = new EventEmitter();
 const { RateLimiterMemory } = require("rate-limiter-flexible");
 const opts = {
   points: 1200, // 1200 points
@@ -212,7 +210,9 @@ router.post(
     rateLimiter
       .consume(ip, 1) // consume 1 point
       .then((rateLimiterRes) => {
-        eventEmitter.emit("addMessage", {
+        console.log("Received request to queue message");
+        console.log("Trying to emit event...");
+        global.eventEmitter.emit("addMessage", {
           clientId: req.body.clientId,
           number: req.body.number,
           message: req.body.message,

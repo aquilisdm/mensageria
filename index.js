@@ -2,15 +2,17 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const session = require("express-session");
 const dotEnv = require("dotenv");
+const EventEmitter = require("events");
+global.eventEmitter = new EventEmitter();
 const MessagesController = require("./modules/Messages/MessagesController");
 const ClientController = require("./modules/Client/ClientController");
 const UserController = require("./modules/User/UserController");
 const ConfigController = require("./modules/Config/ConfigController");
 const CompanyController = require("./modules/Company/CompanyController");
 const cors = require("cors");
-const EventEmitter = require("events");
 const MessageDispatcher = require("./service/MessageDispatcher");
-var eventEmitter = new EventEmitter();
+
+
 
 //nvm use v14.10.0
 //https://docs.wwebjs.dev/Client.html#getChats

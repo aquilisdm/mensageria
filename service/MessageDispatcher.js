@@ -2,7 +2,6 @@
  * Imports
  */
 const MongoDB = require("../logic/MongoDB");
-const EventEmitter = require("events");
 const MessageService = require("../modules/Messages/MessageService");
 const Logger = require("../logic/Logger");
 const { v4: uuidv4 } = require("uuid");
@@ -12,11 +11,10 @@ const { v4: uuidv4 } = require("uuid");
 const MAX_ITERATIONS_PER_MINUTE = 400;
 var queue = [];
 var interval = null;
-var eventEmitter = new EventEmitter();
 /*
  * Events
  */
-eventEmitter.on("addMessage", (msg) => {
+global.eventEmitter.on("addMessage", (msg) => {
   if (msg !== undefined && msg !== null) {
     msg.id = uuidv4(); //Unique random id
     queue.push(msg);
@@ -24,7 +22,7 @@ eventEmitter.on("addMessage", (msg) => {
   }
 });
 
-eventEmitter.on("removeMessage", (msg) => {
+global.eventEmitter.on("removeMessage", (msg) => {
   if (msg !== undefined && msg !== null) {
     queue = queue.filter((value) => {
       return value.id !== msg.id;
@@ -80,7 +78,7 @@ async function removeMessage(id) {
 }
 
 async function processQueue() {
-  let thisQueue = queue;
+  let thisQueue = Array.from(queue);
   let i = 0;
   let response;
 
@@ -91,44 +89,61 @@ async function processQueue() {
       thisQueue[i].message
     );
 
-    if (!response.success) {
+    if (response.success === false) {
       updateMessageStatus(thisQueue[i].id, "failed");
     } else {
       removeMessage(thisQueue[i].id);
     }
 
+    //Remove message from memory queue
+    queue.shift();
+
     i++;
   }
+
+  thisQueue = [];
 }
 /*
  * Main
  */
 const MessageDispatcher = {
   restart: async function () {
+    console.log("Trying to restart message dispatcher...");
     let pendingMessages = await fetchMessagesByStatus("pending");
 
-    if (pendingMessages !== null && pendingMessages.length > 0) {
+    if (
+      pendingMessages !== undefined &&
+      pendingMessages !== null &&
+      pendingMessages.length > 0
+    ) {
       queue = pendingMessages;
     }
 
-    if (internal !== null) {
-      clearTimeout(internal);
+    if (interval !== null) {
+      clearTimeout(interval);
     }
-    internal = setInterval(processQueue, 60000);
+    interval = setInterval(processQueue, 60000);
   },
   start: async function () {
-    if (internal === null) {
+    console.log("Starting message dispatcher...");
+    if (interval === null) {
       let pendingMessages = await fetchMessagesByStatus("pending");
 
-      if (pendingMessages !== null && pendingMessages.length > 0) {
+      if (
+        pendingMessages !== undefined &&
+        pendingMessages !== null &&
+        pendingMessages.length > 0
+      ) {
         queue = pendingMessages;
       }
-      internal = setInterval(processQueue, 60000);
+      interval = setInterval(processQueue, 60000);
+      console.log("Message dispatcher has been stated");
     }
   },
   stop: function () {
+    console.log("Stopping message dispatcher...");
     queue = [];
-    clearTimeout(internal);
+    clearTimeout(interval);
   },
   size: function () {
     return queue.length;

@@ -1,8 +1,5 @@
-var LocalStorage = require("node-localstorage").LocalStorage;
-let localStorage = new LocalStorage("./storage");
 const MongoDB = require("../../logic/MongoDB");
-const WinstonLogger = require("../../winston_logger");
-WinstonLogger.init();
+const Logger = require("../../logic/Logger");
 
 const UserRepository = {
   findUsers: function () {
@@ -17,12 +14,7 @@ const UserRepository = {
           resolve(findResult);
         })
         .catch((err) => {
-          WinstonLogger.logger.log("error", {
-            level: "error",
-            message: err,
-            date: new Date().toUTCString(),
-            location: "UserRepository.findUsers()",
-          });
+          Logger.error(err, "UserRepository.findUsers()");
           reject(err);
         });
     });
@@ -39,12 +31,7 @@ const UserRepository = {
           resolve(findResult);
         })
         .catch((err) => {
-          WinstonLogger.logger.log("error", {
-            level: "error",
-            message: err,
-            date: new Date().toUTCString(),
-            location: "UserRepository.findUsersByName()",
-          });
+          Logger.error(err, "UserRepository.findUsersByName()");
           reject(err);
         });
     });
@@ -61,12 +48,7 @@ const UserRepository = {
           resolve(findResult);
         })
         .catch((err) => {
-          WinstonLogger.logger.log("error", {
-            level: "error",
-            message: err,
-            date: new Date().toUTCString(),
-            location: "UserRepository.findUsersByName()",
-          });
+          Logger.error(err, "UserRepository.findUsersById()");
           reject(err);
         });
     });
@@ -90,12 +72,7 @@ const UserRepository = {
           resolve({ success: true });
         })
         .catch((err) => {
-          WinstonLogger.logger.log("error", {
-            level: "error",
-            message: err,
-            date: new Date().toUTCString(),
-            location: "UserRepository.createUser()",
-          });
+          Logger.error(err, "UserRepository.createUser()");
           resolve({ success: false, message: err });
         });
     });
