@@ -133,6 +133,7 @@ router.get("/getUserChats/:clientId", function (req, res, next) {
         });
     })
     .catch((rateLimiterRes) => {
+      console.log(rateLimiterRes);
       Logger.info(
         "Address: " + ip + " - " + rateLimiterRes,
         "/messages/getCurrentUserChats"
@@ -210,8 +211,6 @@ router.post(
     rateLimiter
       .consume(ip, 1) // consume 1 point
       .then((rateLimiterRes) => {
-        console.log("Received request to queue message");
-        console.log("Trying to emit event...");
         global.eventEmitter.emit("addMessage", {
           clientId: req.body.clientId,
           number: req.body.number,
@@ -225,6 +224,7 @@ router.post(
         });
       })
       .catch((rateLimiterRes) => {
+        console.log(rateLimiterRes);
         Logger.info(
           "Address: " + ip + " - " + rateLimiterRes,
           "/messages/addTextMessageToQueue"

@@ -4,7 +4,7 @@ output=$(curl -s -I http://172.16.0.4:2000/wp-config/checkServerHealth | head -n
 if test -z "$output" || test "$output" = "404";
   then
   if ! screen -list | grep -q "^wpmsg$"; then
-    screen -d -m -S wpmsg node /mnt/prod/wpmessager/index.js
+    pm2 start /mnt/prod/wpmessager/index.js
    
     if test -d "/mnt/prod/wpmessager/crash_logs/"; then
       echo ""

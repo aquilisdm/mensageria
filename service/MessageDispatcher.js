@@ -137,7 +137,6 @@ const MessageDispatcher = {
         queue = pendingMessages;
       }
       interval = setInterval(processQueue, 60000);
-      console.log("Message dispatcher has been stated");
     }
   },
   stop: function () {

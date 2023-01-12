@@ -3,7 +3,7 @@ https://drive.google.com/drive/folders/1iu3KCWMwuOSmrohJN4uE62CaJwCihSmF?usp=sha
 # Atenção: Lembre-se que é necessario iniciar o proxy (bait-proxy) para aceitar requests nas API's do simw e mensageria
 
 # Iniciar Servidor 
-sudo screen -d -m -S wpmsg node index.js
+pm2 start index.js
 
 # Configurar cronjob para verificar o servidor periodicamente
 sudo crontab -e

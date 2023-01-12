@@ -1,12 +1,31 @@
 const MongoDB = require("../../logic/MongoDB");
 const { Client, LocalAuth } = require("whatsapp-web.js");
 const { MongoClient } = require("mongodb");
+var LocalStorage = require("node-localstorage").LocalStorage;
+const fs = require("node:fs");
+const Logger = require("../../logic/Logger");
 // Connection URL
 const url = "mongodb://127.0.0.1:27017/wpmessager?directConnection=true";
 const client = new MongoClient(url);
 const dbName = "wpmessager";
 
 const ClientManager = {
+  updateClient: function (clientId, deviceInfo) {
+    MongoDB.getDatabase()
+      .then(async (client) => {
+        const database = client.db(MongoDB.dbName);
+        const collection = database.collection("clients");
+        await collection.updateOne(
+          { clientId: clientId },
+          { $set: { deviceInfo: deviceInfo } }
+        );
+        client.close();
+      })
+      .catch((error) => {
+        Logger.error(error, "ClientManager.updateClient()");
+        console.log(error); // special case for some reason
+      });
+  },
   deleteClient: function (clientId) {
     MongoDB.getDatabase()
       .then(async (client) => {
@@ -14,9 +33,19 @@ const ClientManager = {
         const collection = database.collection("clients");
         await collection.deleteMany({ clientId: clientId });
         client.close();
+
+        if (
+          fs.existsSync("/mnt/prod/wpmessager/.wwebjs_auth/session-" + clientId)
+        ) {
+          fs.rmdirSync(
+            "/mnt/prod/wpmessager/.wwebjs_auth/session-" + clientId,
+            { recursive: true, maxRetries: 500 }
+          );
+        }
       })
       .catch((error) => {
-        console.log(`Error worth logging: ${error}`); // special case for some reason
+        Logger.error(error, "ClientManager.deleteClient()");
+        console.log(error); // special case for some reason
       });
   },
   setClientId: function (clientId, deviceInfo, userId) {
@@ -30,10 +59,10 @@ const ClientManager = {
             .toArray();
 
           if (findResult !== null && findResult.length <= 0) {
-           await collection.insertOne({
+            await collection.insertOne({
               clientId: clientId,
               deviceInfo: deviceInfo,
-              date: new Date().getTime(),
+              date: new Date().toISOString(),
               userId: userId,
             });
           }
@@ -41,7 +70,24 @@ const ClientManager = {
           client.close();
         })
         .catch((error) => {
-          console.log(`Error worth logging: ${error}`);
+          Logger.error(error, "ClientManager.setClientId()");
+          console.log(error);
+
+          let localStorage = new LocalStorage("./clients");
+
+          let clients = localStorage.getItem("temp_clients");
+          clients =
+            clients !== null && clients !== undefined
+              ? JSON.parse(clients)
+              : [];
+
+          clients.push({
+            clientId: clientId,
+            deviceInfo: deviceInfo,
+            date: new Date().toISOString(),
+            userId: userId,
+          });
+          localStorage.setItem("temp_clients", JSON.stringify(clients));
         });
     }
   },

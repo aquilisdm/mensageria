@@ -11,8 +11,10 @@ const ConfigController = require("./modules/Config/ConfigController");
 const CompanyController = require("./modules/Company/CompanyController");
 const cors = require("cors");
 const MessageDispatcher = require("./service/MessageDispatcher");
+const ClientChecker = require("./service/ClientChecker");
 
-
+//Solução do problema ao escanear o qr code
+//https://github.com/Julzk/whatsapp-web.js/commit/668be3bd8442235530ee11f1cb397e929e2f670b
 
 //nvm use v14.10.0
 //https://docs.wwebjs.dev/Client.html#getChats
@@ -70,4 +72,5 @@ app.use("/wp-company", CompanyController);
 app.listen(2000, function () {
   console.log("Starting server on", 2000);
   MessageDispatcher.start();
+  ClientChecker.start();
 });

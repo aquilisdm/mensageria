@@ -1,28 +1,28 @@
-const { Client, LegacySessionAuth, LocalAuth } = require("whatsapp-web.js");
+const { Client, LocalAuth } = require("whatsapp-web.js");
 const qrcode = require("qrcode-terminal");
 const Logger = require("../../logic/Logger");
+const { v4: uuidv4 } = require("uuid");
 const ClientManager = require("../Client/ClientManager");
+const EventEmitter = require("events");
+let eventEmitter = new EventEmitter();
 var clientMap = {};
+
+eventEmitter.on("newClient", function (clientId) {
+  if (clientMap[clientId] !== null && clientMap[clientId] !== undefined) {
+    clientMap[clientId].on("disconnected", () => {
+      console.log("Device has been disconnected " + clientId);
+      Logger.info(clientId + " has been disconnected", "MessageService.eventEmitter");
+
+      ClientManager.deleteClient(clientId);
+      clientMap[clientId] = undefined;
+    });
+  }
+});
 
 function establishOrCreateConnection(clientId) {
   return new Promise(async (resolve, reject) => {
     if (clientMap[clientId] === undefined) {
       clientMap[clientId] = ClientManager.createClientSession(clientId);
-
-      clientMap[clientId].on("disconnected", () => {
-        Logger.info(
-          clientId + " has been disconnected",
-          "MessageService.establishOrCreateConnection()"
-        );
-        clientMap[clientId] = undefined;
-      });
-
-      clientMap[clientId].on("auth_failure", () => {
-        Logger.error(
-          clientId + " authentication failed",
-          "MessageService.establishOrCreateConnection()"
-        );
-      });
 
       try {
         //Initialize the client
@@ -60,7 +60,7 @@ const MessageService = {
       ClientManager.deleteClient(clientId);
       const timeout = setTimeout(() => {
         resolve(false);
-      }, 8000);
+      }, 5000);
       if (await establishOrCreateConnection(clientId)) {
         clearTimeout(timeout);
         clientMap[clientId].logout();
@@ -74,13 +74,23 @@ const MessageService = {
   getDeviceInfo: function (clientId) {
     return new Promise(async (resolve, reject) => {
       try {
+        const timeout = setTimeout(() => {
+          resolve({
+            success: false,
+            message:
+              "ClientId hasn't been found or the device was disconnected...",
+          });
+        }, 5000);
+
         if (await establishOrCreateConnection(clientId)) {
+          clearTimeout(timeout);
           let info = clientMap[clientId].info;
           resolve({ success: true, deviceInfo: info });
         } else {
           resolve({
             success: false,
-            message: "ClientId hasn't been found or it was disconnected...",
+            message:
+              "ClientId hasn't been found or the device was disconnected...",
           });
         }
       } catch (err) {
@@ -175,7 +185,7 @@ const MessageService = {
   authenticate: function (callback, userId) {
     return new Promise(async (resolve, reject) => {
       try {
-        const uniqueRandomID = new Date().getTime();
+        const uniqueRandomID = uuidv4().replaceAll("-", "");
 
         const client = ClientManager.createClientSession(uniqueRandomID);
 
@@ -193,10 +203,10 @@ const MessageService = {
             client.info !== undefined ? client.info : {},
             userId
           );
-
           //Save the connection
           clientMap[uniqueRandomID] = client;
-          //client.destroy();
+          eventEmitter.emit("newClient", uniqueRandomID);
+          client.info.uniqueRandomID = uniqueRandomID;
           Logger.info(client.info, "MessageService.authenticate()");
           callback({ ready: true, clientId: uniqueRandomID });
         });
@@ -204,7 +214,7 @@ const MessageService = {
         client.initialize();
       } catch (err) {
         console.log(err);
-        client.destroy();
+        //client.destroy();
         resolve({ ready: false, message: err });
       }
     });
