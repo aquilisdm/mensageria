@@ -9,6 +9,7 @@ const opts = {
   points: 500, // 500 points
   duration: 1, // Per second
 };
+const Logger = require("../../logic/Logger");
 
 //root
 //wpmanager@net2022
@@ -77,6 +78,7 @@ router.post("/register", function (req, res, next) {
           })
           .catch((err) => {
             console.log(err);
+            Logger.error(err, "/wp-users/register", { ip: ip });
           });
       } else {
         return res.json({
@@ -87,6 +89,7 @@ router.post("/register", function (req, res, next) {
       }
     })
     .catch((rateLimiterRes) => {
+      Logger.error(rateLimiterRes, "/wp-users/register", { ip: ip });
       // Not enough points to consume
       return res.status(204).json({
         success: false,
@@ -96,10 +99,16 @@ router.post("/register", function (req, res, next) {
 });
 
 router.post("/validateUserToken", function (req, res, next) {
-  if (Authentication.verifyToken(req.body.token) !== null) {
-    return res.json({ success: true });
-  } else {
-    return res.json({ success: false });
+  try {
+    if (Authentication.verifyToken(req.body.token) !== null) {
+      return res.json({ success: true });
+    } else {
+      return res.json({ success: false });
+    }
+  } catch (err) {
+    let ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+    console.log(err);
+    Logger.error(err, "/wp-users/register", { ip: ip });
   }
 });
 

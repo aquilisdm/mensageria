@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const CompanyService = require("./CompanyService");
+const Logger = require("../../logic/Logger");
 
 router.get("/getCompanyById/:companyId", function (req, res, next) {
   CompanyService.getCompanyById(req.params.companyId)
@@ -8,6 +9,8 @@ router.get("/getCompanyById/:companyId", function (req, res, next) {
       return res.json(companies);
     })
     .catch((err) => {
+      var ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+      Logger.error(err, "/wp-company/getCompanyById/:companyId", { ip: ip });
       console.log(err);
     });
 });
@@ -19,6 +22,8 @@ router.get("/get", function (req, res, next) {
     })
     .catch((err) => {
       console.log(err);
+      Logger.error(err, "/wp-company/get", { ip: ip });
+      return res.json([]);
     });
 });
 
@@ -30,6 +35,7 @@ router.post("/create", function (req, res, next) {
       })
       .catch((err) => {
         console.log(err);
+        Logger.error(err, "/wp-company/create", { ip: ip });
         return res.json({ success: false, message: err });
       });
   } else {

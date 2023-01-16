@@ -1,5 +1,6 @@
 const MongoDB = require("../../logic/MongoDB");
 const Logger = require("../../logic/Logger");
+const { v4: uuidv4 } = require("uuid");
 
 const UserRepository = {
   findUsers: function () {
@@ -59,9 +60,9 @@ const UserRepository = {
         .then(async (client) => {
           const database = client.db(MongoDB.dbName);
           const collection = database.collection("users");
-          
+
           await collection.insertOne({
-            id: new Date().getTime(),
+            id: uuidv4(),
             name: name,
             password: password,
             company: company,

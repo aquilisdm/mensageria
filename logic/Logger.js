@@ -1,7 +1,7 @@
 const MongoDB = require("./MongoDB");
 
 const Logger = {
-  message: function (message,status) {
+  message: function (message, status) {
     return new Promise(async (resolve, reject) => {
       MongoDB.getDatabase()
         .then(async (client) => {
@@ -10,9 +10,9 @@ const Logger = {
 
           await collection.insertOne({
             level: "message",
-            clientId:message.clientId,
+            clientId: message.clientId,
             message: message.message,
-            number:message.number,
+            number: message.number,
             ip: message.ip,
             status: status,
             date: new Date().toISOString(),
@@ -27,7 +27,7 @@ const Logger = {
         });
     });
   },
-  error: function (err, location) {
+  error: function (err, location, additionalDetails) {
     return new Promise(async (resolve, reject) => {
       MongoDB.getDatabase()
         .then(async (client) => {
@@ -39,6 +39,7 @@ const Logger = {
             message: err,
             endpoint: location,
             date: new Date().toISOString(),
+            additionalDetails: additionalDetails !== undefined ? additionalDetails : {},
           });
 
           client.close();
@@ -50,7 +51,7 @@ const Logger = {
         });
     });
   },
-  info: function (info, location) {
+  info: function (info, location, additionalDetails) {
     return new Promise(async (resolve, reject) => {
       MongoDB.getDatabase()
         .then(async (client) => {
@@ -62,6 +63,8 @@ const Logger = {
             message: info,
             endpoint: location,
             date: new Date().toISOString(),
+            additionalDetails:
+              additionalDetails !== undefined ? additionalDetails : {},
           });
 
           client.close();

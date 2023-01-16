@@ -8,5 +8,5 @@ pm2 start index.js
 # Configurar cronjob para verificar o servidor periodicamente
 sudo crontab -e
 # Configurar task (no arquivo do crontab)
-*/15  * * * * /mnt/prod/wpmessager/check_server_health_job.sh
+# */15  * * * * /mnt/prod/wpmessager/check_server_health_job.sh
 @reboot /mnt/prod/wpmessager/check_server_health_job.sh

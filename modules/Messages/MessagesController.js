@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const Authentication = require("../../logic/Authentication");
-const MessageService = require("./MessageService.js");
+const MessageService = require("./wp-messages/messageservice.js");
 const Logger = require("../../logic/Logger");
 const { RateLimiterMemory } = require("rate-limiter-flexible");
 const opts = {
@@ -34,7 +34,8 @@ router.post("/logout", function (req, res, next) {
       return res.json({ success: true });
     })
     .catch((err) => {
-      Logger.error(err, "/messages/logout");
+      let ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+      Logger.error(err, "/wp-messages/messages/logout", { ip: ip });
       return res.json({ success: false });
     });
 });
@@ -57,7 +58,10 @@ router.get(
             return res.json(info);
           })
           .catch((err) => {
-            Logger.error(err, "/messages/deviceInfo");
+            Logger.error(err, "/wp-messages/messages/deviceInfo", {
+              ip: ip,
+              user: req.userData.userId,
+            });
             return res.json({ success: false, message: err });
           });
       })
@@ -65,7 +69,11 @@ router.get(
         // Not enough points to consume
         Logger.info(
           "Address: " + ip + " - " + rateLimiterRes,
-          "/messages/deviceInfo"
+          "/wp-messages/messages/deviceInfo",
+          {
+            ip: ip,
+            user: req.userData.userId,
+          }
         );
         return res.status(204).json({
           success: false,
@@ -104,8 +112,12 @@ router.get(
         return res.json(messages);
       })
       .catch((err) => {
+        let ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
         console.log(err);
-        Logger.info(err, "/messages/getUserChatMessagesByChatId");
+        Logger.info(err, "/wp-messages/messages/getUserChatMessagesByChatId", {
+          ip: ip,
+          user: req.userData.userId,
+        });
         return res.json([]);
       });
   }
@@ -127,8 +139,11 @@ router.get("/getUserChats/:clientId", function (req, res, next) {
           return res.json(chats);
         })
         .catch((err) => {
+          let ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
           console.log(err);
-          Logger.info(err, "/messages/getCurrentUserChats");
+          Logger.error(err, "/wp-messages/wp-messages/messages/getCurrentUserChats", {
+            ip: ip,
+          });
           return res.json([]);
         });
     })
@@ -136,7 +151,8 @@ router.get("/getUserChats/:clientId", function (req, res, next) {
       console.log(rateLimiterRes);
       Logger.info(
         "Address: " + ip + " - " + rateLimiterRes,
-        "/messages/getCurrentUserChats"
+        "/wp-messages/wp-messages/messages/getCurrentUserChats",
+        { ip: ip }
       );
       // Not enough points to consume
       return res.status(204).json({
@@ -174,7 +190,10 @@ router.post(
           })
           .catch((err) => {
             console.log(err);
-            Logger.info(err, "/messages/sendTextMessage");
+            Logger.error(err, "/wp-messages/wp-messages/messages/sendTextMessage", {
+              ip: ip,
+              user: req.userData.userId,
+            });
 
             return res.json({
               success: false,
@@ -186,7 +205,8 @@ router.post(
       .catch((rateLimiterRes) => {
         Logger.info(
           "Address: " + ip + " - " + rateLimiterRes,
-          "/messages/sendTextMessage"
+          "/wp-messages/messages/sendTextMessage",
+          { ip: ip, user: req.userData.userId }
         );
         // Not enough points to consume
         return res.status(204).json({
@@ -227,7 +247,8 @@ router.post(
         console.log(rateLimiterRes);
         Logger.info(
           "Address: " + ip + " - " + rateLimiterRes,
-          "/messages/addTextMessageToQueue"
+          "/wp-messages/messages/addTextMessageToQueue",
+          { ip: ip, user: req.userData.userId }
         );
         // Not enough points to consume
         return res.status(204).json({

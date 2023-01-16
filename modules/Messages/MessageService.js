@@ -190,7 +190,7 @@ const MessageService = {
         const client = ClientManager.createClientSession(uniqueRandomID);
 
         client.on("qr", (qr) => {
-          // Generate and scan this code with your phone
+          //Just in development
           //qrcode.generate(qr, { small: true });
           callback({ qr: qr, clientId: uniqueRandomID, ready: false });
         });
