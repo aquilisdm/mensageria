@@ -1,32 +1,44 @@
 const { Client, LocalAuth } = require("whatsapp-web.js");
 const qrcode = require("qrcode-terminal");
 const Logger = require("../../logic/Logger");
+const MessageRepository = require('./MessageRepository');
 const { v4: uuidv4 } = require("uuid");
 const ClientManager = require("../Client/ClientManager");
 const EventEmitter = require("events");
-let eventEmitter = new EventEmitter();
-var clientMap = {};
+const eventEmitter = new EventEmitter();
+eventEmitter.setMaxListeners(120);
 
-eventEmitter.on("newClient", function (clientId) {
-  if (clientMap[clientId] !== null && clientMap[clientId] !== undefined) {
-    clientMap[clientId].on("disconnected", () => {
-      console.log("Device has been disconnected " + clientId);
-      Logger.info(clientId + " has been disconnected", "MessageService.eventEmitter");
+eventEmitter.on("newClient", function (clientId, userId) {
+  if (global.clientMap[clientId] !== null && global.clientMap[clientId] !== undefined) {
+    global.clientMap[clientId].on("disconnected", () => {
+      console.log(
+        "Device has been disconnected " +
+          clientId +
+          " at " +
+          new Date().toString()
+      );
+      Logger.info(
+        clientId + " has been disconnected",
+        "MessageService.eventEmitter",
+        { userId: userId, clientId: clientId }
+      );
 
       ClientManager.deleteClient(clientId);
-      clientMap[clientId] = undefined;
+      global.clientMap[clientId].removeAllListeners("disconnected");
+      global.clientMap[clientId].destroy();
+      global.clientMap[clientId] = undefined;
     });
   }
 });
 
 function establishOrCreateConnection(clientId) {
   return new Promise(async (resolve, reject) => {
-    if (clientMap[clientId] === undefined) {
-      clientMap[clientId] = ClientManager.createClientSession(clientId);
+    if (global.clientMap[clientId] === undefined) {
+      global.clientMap[clientId] = ClientManager.createClientSession(clientId);
 
       try {
         //Initialize the client
-        await clientMap[clientId].initialize();
+        await global.clientMap[clientId].initialize();
         resolve(true);
       } catch (err) {
         console.log(err);
@@ -47,8 +59,8 @@ const MessageService = {
   endConnection: function (clientId) {
     return new Promise(async (resolve, reject) => {
       if (await establishOrCreateConnection(clientId)) {
-        clientMap[clientId].destroy();
-        clientMap[clientId] = undefined;
+        global.clientMap[clientId].destroy();
+        global.clientMap[clientId] = undefined;
         resolve(true);
       } else {
         resolve(false);
@@ -63,8 +75,8 @@ const MessageService = {
       }, 5000);
       if (await establishOrCreateConnection(clientId)) {
         clearTimeout(timeout);
-        clientMap[clientId].logout();
-        clientMap[clientId] = undefined;
+        global.clientMap[clientId].logout();
+        global.clientMap[clientId] = undefined;
         resolve(true);
       } else {
         resolve(false);
@@ -84,7 +96,7 @@ const MessageService = {
 
         if (await establishOrCreateConnection(clientId)) {
           clearTimeout(timeout);
-          let info = clientMap[clientId].info;
+          let info = global.clientMap[clientId].info;
           resolve({ success: true, deviceInfo: info });
         } else {
           resolve({
@@ -102,7 +114,7 @@ const MessageService = {
   getChatMessagesByChatId: function (clientId, chatId) {
     return new Promise(async (resolve, reject) => {
       if (await establishOrCreateConnection(clientId)) {
-        clientMap[clientId]
+        global.clientMap[clientId]
           .getChatById(chatId)
           .then(async (chat) => {
             if (chat !== null) {
@@ -131,7 +143,7 @@ const MessageService = {
   getCurrentUserChats: function (clientId) {
     return new Promise(async (resolve, reject) => {
       if (await establishOrCreateConnection(clientId)) {
-        clientMap[clientId]
+        global.clientMap[clientId]
           .getChats()
           .then((chats) => {
             resolve(chats);
@@ -148,11 +160,11 @@ const MessageService = {
     return new Promise(async (resolve, reject) => {
       try {
         if (await establishOrCreateConnection(clientId)) {
-          let wpClientId = await clientMap[clientId].getNumberId(number);
+          let wpClientId = await global.clientMap[clientId].getNumberId(number);
 
           if (wpClientId !== null) {
             //Send message
-            await clientMap[clientId].sendMessage(
+            await global.clientMap[clientId].sendMessage(
               wpClientId._serialized,
               message
             );
@@ -182,7 +194,7 @@ const MessageService = {
       }
     });
   },
-  authenticate: function (callback, userId) {
+  authenticate: function (callback, userId, ip) {
     return new Promise(async (resolve, reject) => {
       try {
         const uniqueRandomID = uuidv4().replaceAll("-", "");
@@ -195,19 +207,22 @@ const MessageService = {
           callback({ qr: qr, clientId: uniqueRandomID, ready: false });
         });
 
-        client.on("ready", () => {
+        client.on("ready", async () => {
           //console.log("Client is ready!");
           //console.log("ID: " + uniqueRandomID);
-          ClientManager.setClientId(
+          await ClientManager.setClientId(
             uniqueRandomID,
             client.info !== undefined ? client.info : {},
-            userId
+            userId,
+            ip
           );
           //Save the connection
-          clientMap[uniqueRandomID] = client;
-          eventEmitter.emit("newClient", uniqueRandomID);
+          global.clientMap[uniqueRandomID] = client;
+          eventEmitter.emit("newClient", uniqueRandomID,userId);
           client.info.uniqueRandomID = uniqueRandomID;
           Logger.info(client.info, "MessageService.authenticate()");
+          client.removeAllListeners("qr");
+          client.removeAllListeners("ready");
           callback({ ready: true, clientId: uniqueRandomID });
         });
 

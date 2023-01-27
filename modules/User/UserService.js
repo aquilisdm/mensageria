@@ -50,8 +50,8 @@ const UserService = {
   createUser: function (name, password, company) {
     return new Promise(async (resolve, reject) => {
       if (
-        validator.isLength(name, { min: 1, max: 100 }) &&
-        validator.isLength(password, { min: 1, max: 100 }) &&
+        validator.isLength(name, { min: 1, max: 60 }) &&
+        validator.isLength(password, { min: 1, max: 64 }) &&
         validator.isLength(company, { min: 1, max: 500 })
       ) {
         name = validator.escape(name);

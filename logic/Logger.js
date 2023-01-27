@@ -15,7 +15,7 @@ const Logger = {
             number: message.number,
             ip: message.ip,
             status: status,
-            date: new Date().toISOString(),
+            date: new Date().toString(),
           });
 
           client.close();
@@ -38,7 +38,7 @@ const Logger = {
             level: "error",
             message: err,
             endpoint: location,
-            date: new Date().toISOString(),
+            date: new Date().toString(),
             additionalDetails: additionalDetails !== undefined ? additionalDetails : {},
           });
 
@@ -62,7 +62,7 @@ const Logger = {
             level: "info",
             message: info,
             endpoint: location,
-            date: new Date().toISOString(),
+            date: new Date().toString(),
             additionalDetails:
               additionalDetails !== undefined ? additionalDetails : {},
           });

@@ -9,7 +9,7 @@ const CompanyService = {
     return CompanyRepository.getCompanies();
   },
   createCompany: function (name) {
-    if (validator.isLength(name, { min: 1, max: 200 })) {
+    if (validator.isLength(name, { min: 1, max: 60 })) {
       return CompanyRepository.createCompany(name);
     } else {
       return { success: false, message: "You reached the character limit" };

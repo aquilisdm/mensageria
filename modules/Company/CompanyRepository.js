@@ -1,65 +1,126 @@
 const uuid = require("uuid");
 const MongoDB = require("../../logic/MongoDB");
+const SQLServer = require("../../logic/SQLServer");
+var TYPES = require("tedious").TYPES;
+var Request = require("tedious").Request;
 
 const CompanyRepository = {
   getCompanyById: function (id) {
     return new Promise((resolve, reject) => {
-      MongoDB.getDatabase()
-        .then(async (client) => {
-          const database = client.db(MongoDB.dbName);
-          const collection = database.collection("companies");
-          const findResult = await collection.find({ id: id }).toArray();
-
-          client.close();
-          resolve(findResult);
-        })
-        .catch((err) => {
+      const connection = SQLServer.getConnection();
+      var result = [];
+      connection.on("connect", function (err) {
+        if (err) {
           reject(err);
+        }
+        // If no error, then good to proceed.
+        let request = new Request(
+          `select top 100 Mensageria.EMPRESAS_MENSAGERIA.CODIGO_EMPRESA as id,Mensageria.EMPRESAS_MENSAGERIA.NOME_EMPRESA as name from Mensageria.EMPRESAS_MENSAGERIA where CODIGO_EMPRESA = @id;`,
+          function (err) {
+            if (err) {
+              console.log(err);
+              reject(err);
+            }
+          }
+        );
+
+        request.on("row", function (columns) {
+          columns = SQLServer.formatResponse(columns);
+          if (Array.isArray(columns)) {
+            columns.forEach(function (column) {
+              if (column !== null) {
+                result.push(column);
+              }
+            });
+          }
         });
+
+        request.on("requestCompleted", function (rowCount, more) {
+          request.removeAllListeners("row");
+          connection.close();
+          resolve(result);
+        });
+
+        request.addParameter("id", TYPES.Int, id);
+
+        connection.execSql(request);
+      });
+
+      connection.connect();
     });
   },
   getCompanies: function () {
     return new Promise((resolve, reject) => {
-      MongoDB.getDatabase()
-        .then(async (client) => {
-          const database = client.db(MongoDB.dbName);
-          const collection = database.collection("companies");
-          const findResult = await collection.find({}).toArray();
-
-          client.close();
-          resolve(findResult);
-        })
-        .catch((err) => {
+      const connection = SQLServer.getConnection();
+      var result = [];
+      connection.on("connect", function (err) {
+        if (err) {
           reject(err);
+        }
+        // If no error, then good to proceed.
+        let request = new Request(
+          `select top 100 Mensageria.EMPRESAS_MENSAGERIA.CODIGO_EMPRESA as id,Mensageria.EMPRESAS_MENSAGERIA.NOME_EMPRESA as name from Mensageria.EMPRESAS_MENSAGERIA;`,
+          function (err) {
+            if (err) {
+              console.log(err);
+              reject(err);
+            }
+          }
+        );
+
+        request.on("row", function (columns) {
+          columns = SQLServer.formatResponse(columns);
+          if (Array.isArray(columns)) {
+            columns.forEach(function (column) {
+              if (column !== null) {
+                result.push(column);
+              }
+            });
+          }
         });
+
+        request.on("requestCompleted", function (rowCount, more) {
+          request.removeAllListeners("row");
+          connection.close();
+          resolve(result);
+        });
+
+        connection.execSql(request);
+      });
+
+      connection.connect();
     });
   },
   createCompany: function (name) {
     return new Promise((resolve, reject) => {
-      let id = uuid.v1();
-
-      MongoDB.getDatabase()
-        .then(async (client) => {
-          const database = client.db(MongoDB.dbName);
-          const collection = database.collection("companies");
-          const findResult = await collection.find({ name: name }).toArray();
-
-          if (findResult !== null && findResult.length <= 0) {
-            await collection.insertOne({ id: id, name: name });
-            resolve({ success: true });
-          } else {
-            resolve({
-              success: false,
-              message: "This company name is already taken",
-            });
+      const connection = SQLServer.getConnection();
+      var result = [];
+      connection.on("connect", function (err) {
+        if (err) {
+          reject(err);
+        }
+        // If no error, then good to proceed.
+        let request = new Request(
+          `insert into Mensageria.EMPRESAS_MENSAGERIA (NOME_EMPRESA) values ('@NOME_EMPRESA');`,
+          function (err) {
+            if (err) {
+              console.log(err);
+              reject(err);
+            }
           }
+        );
 
-          client.close();
-          resolve({ success: true });
-        })
-        .catch((error) => {
-          resolve({ success: false, message: err });
+        request.addParameter("NOME_EMPRESA", TYPES.NVarChar, name);
+
+        request.on("requestCompleted", function (rowCount, more) {
+          connection.close();
+          resolve(true);
         });
+        
+        connection.execSql(request);
+      });
+
+      connection.connect();
     });
   },
 };

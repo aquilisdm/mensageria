@@ -1,6 +1,9 @@
+# Atenção: Lembre-se que é necessario iniciar o proxy (bait-proxy) 
+# para aceitar requests nas API's do simw e mensageria
+
 # Link para o proxy
 https://drive.google.com/drive/folders/1iu3KCWMwuOSmrohJN4uE62CaJwCihSmF?usp=share_link
-# Atenção: Lembre-se que é necessario iniciar o proxy (bait-proxy) para aceitar requests nas API's do simw e mensageria
+
 
 # Iniciar Servidor 
 pm2 start index.js

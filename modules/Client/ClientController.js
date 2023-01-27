@@ -8,13 +8,17 @@ router.get(
   "/get",
   Authentication.verifyTokenMiddleware,
   function (req, res, next) {
-    ClientManager.getClients(req.userData.userId)
-      .then((clients) => {
-        return res.json(clients);
-      })
-      .catch((err) => {
-        console.log(err);
-      });
+    try {
+      ClientManager.getClients(req.userData.userId)
+        .then((clients) => {
+          return res.json(clients);
+        })
+        .catch((err) => {
+          console.log(err);
+        });
+    } catch (err) {
+      console.log(err);
+    }
   }
 );
 

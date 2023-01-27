@@ -2,8 +2,13 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const session = require("express-session");
 const dotEnv = require("dotenv");
+const process = require("node:process");
 const EventEmitter = require("events");
+global.clientMap = {};
+global.queue = [];
+global.scheduledQueue = [];
 global.eventEmitter = new EventEmitter();
+global.eventEmitter.setMaxListeners(80);
 const MessagesController = require("./modules/Messages/MessagesController");
 const ClientController = require("./modules/Client/ClientController");
 const UserController = require("./modules/User/UserController");
@@ -11,7 +16,16 @@ const ConfigController = require("./modules/Config/ConfigController");
 const CompanyController = require("./modules/Company/CompanyController");
 const cors = require("cors");
 const MessageDispatcher = require("./service/MessageDispatcher");
-const ClientChecker = require("./service/ClientChecker");
+const MessageScheduler = require("./service/MessageScheduler");
+//Hermod
+//Start server
+//pm2 start index.js --name wpmsg
+
+//Restart server
+//pm2 restart [app id || app name]
+
+//Stop server (Not recommend)
+//pm2 stop [app id || app name]
 
 //Solução do problema ao escanear o qr code
 //https://github.com/Julzk/whatsapp-web.js/commit/668be3bd8442235530ee11f1cb397e929e2f670b
@@ -60,7 +74,11 @@ app.use(function (req, res, next) {
 });
 
 app.get("/", function (req, res, next) {
-  return res.json({ message: "Welcome to WhatsApp Manager API" });
+  //Main page
+  return res.json({
+    message:
+      "Welcome to WhatsApp Manager API. See the documentation for more details",
+  });
 });
 
 app.use("/wp-messages", MessagesController);
@@ -69,8 +87,18 @@ app.use("/wp-users", UserController);
 app.use("/wp-config", ConfigController);
 app.use("/wp-company", CompanyController);
 
+process.on("exit", (code) => {
+  console.log(`About to exit with code: ${code}`);
+  console.log(`Removing active listeners...`);
+  console.log(`Emptying queue...`);
+  global.eventEmitter.removeAllListeners("addMessage");
+  global.eventEmitter.removeAllListeners("removeMessage");
+  global.queue = [];
+  global.scheduledQueue = [];
+  MessageScheduler.stop();
+});
+
 app.listen(2000, function () {
   console.log("Starting server on", 2000);
-  MessageDispatcher.start();
-  ClientChecker.start();
+  MessageScheduler.start();
 });

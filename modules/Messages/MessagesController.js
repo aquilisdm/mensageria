@@ -1,8 +1,11 @@
 const express = require("express");
 const router = express.Router();
 const Authentication = require("../../logic/Authentication");
-const MessageService = require("./wp-messages/messageservice.js");
+const MessageService = require("./MessageService.js");
 const Logger = require("../../logic/Logger");
+const fs = require("node:fs");
+const validator = require("validator");
+const ClientManager = require("../Client/ClientManager");
 const { RateLimiterMemory } = require("rate-limiter-flexible");
 const opts = {
   points: 1200, // 1200 points
@@ -90,6 +93,11 @@ router.get("/requestQR/:token", function (req, res, next) {
     Connection: "keep-alive",
   });
 
+  var ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+  if (ip == undefined || ip == null) {
+    ip = req.headers[req.params.token];
+  }
+
   let decoded = Authentication.verifyToken(req.params.token);
 
   if (decoded !== null) {
@@ -97,7 +105,7 @@ router.get("/requestQR/:token", function (req, res, next) {
 
     MessageService.authenticate((response) => {
       writeServerSendEvent(res, sseId, JSON.stringify(response));
-    }, decoded.userId);
+    }, decoded.userId,ip);
   } else res.status(401).json({ success: false, message: "Token is invalid" });
 });
 
@@ -141,9 +149,13 @@ router.get("/getUserChats/:clientId", function (req, res, next) {
         .catch((err) => {
           let ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
           console.log(err);
-          Logger.error(err, "/wp-messages/wp-messages/messages/getCurrentUserChats", {
-            ip: ip,
-          });
+          Logger.error(
+            err,
+            "/wp-messages/wp-messages/messages/getCurrentUserChats",
+            {
+              ip: ip,
+            }
+          );
           return res.json([]);
         });
     })
@@ -190,10 +202,14 @@ router.post(
           })
           .catch((err) => {
             console.log(err);
-            Logger.error(err, "/wp-messages/wp-messages/messages/sendTextMessage", {
-              ip: ip,
-              user: req.userData.userId,
-            });
+            Logger.error(
+              err,
+              "/wp-messages/wp-messages/messages/sendTextMessage",
+              {
+                ip: ip,
+                user: req.userData.userId,
+              }
+            );
 
             return res.json({
               success: false,
@@ -231,17 +247,33 @@ router.post(
     rateLimiter
       .consume(ip, 1) // consume 1 point
       .then((rateLimiterRes) => {
-        global.eventEmitter.emit("addMessage", {
-          clientId: req.body.clientId,
-          number: req.body.number,
-          message: req.body.message,
-          ip: ip,
-        });
+        if (
+          validator.isLength(req.body.clientId, { min: 1, max: 32 }) &&
+          fs.existsSync(
+            "/mnt/prod/wpmessager/.wwebjs_auth/session-" + req.body.clientId
+          )
+        ) {
+          global.eventEmitter.emit("addMessage", {
+            clientId: req.body.clientId,
+            number: req.body.number,
+            message: req.body.message,
+            ip: ip,
+          });
 
-        return res.json({
-          success: true,
-          message: "Your message was added to the queue",
-        });
+          return res.json({
+            success: true,
+            message: "Your message was added to the queue",
+          });
+        } else {
+          if (req.body.clientId.length == 32) {
+            ClientManager.deleteClient(req.body.clientId);
+          }
+          return res.json({
+            success: false,
+            message:
+              "The specified device is invalid or it may be disconnected, please make sure the device is properly connected to WhatsAppManager...",
+          });
+        }
       })
       .catch((rateLimiterRes) => {
         console.log(rateLimiterRes);

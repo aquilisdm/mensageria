@@ -14,37 +14,45 @@ const Logger = require("../../logic/Logger");
 //root
 //wpmanager@net2022
 router.post("/login", async function (req, res, next) {
-  if (req.body.username !== undefined && req.body.password !== undefined) {
-    let result = await UserService.findUsersByName(
-      validator.escape(req.body.username)
-    );
-
-    if (
-      result !== undefined &&
-      result.length > 0 &&
-      bcrypt.compareSync(req.body.password, result[0].password)
-    ) {
-      return res.json({
-        success: true,
-        token: Authentication.generateToken(
-          result[0].name,
-          result[0].company,
-          result[0].id
-        ),
-        message: "Authenticated successfully!",
-        company: result[0].company,
-        name: result[0].name,
-      });
+  try {
+    if (req.body.username !== undefined && req.body.password !== undefined) {
+      let result = await UserService.findUsersByName(
+        validator.escape(req.body.username)
+      );
+      console.log(result.length);
+      if (
+        result !== undefined &&
+        result.length > 0 &&
+        bcrypt.compareSync(req.body.password, result[0].password)
+      ) {
+        return res.json({
+          success: true,
+          token: Authentication.generateToken(
+            result[0].name,
+            result[0].company,
+            result[0].id
+          ),
+          message: "Authenticated successfully!",
+          company: result[0].company,
+          name: result[0].name,
+        });
+      } else {
+        return res.json({
+          success: false,
+          message: "user or password is incorrect",
+        });
+      }
     } else {
       return res.json({
         success: false,
         message: "user or password is incorrect",
       });
     }
-  } else {
+  } catch (err) {
+    console.log(err);
     return res.json({
       success: false,
-      message: "user or password is incorrect",
+      message: "Internal error",
     });
   }
 });
