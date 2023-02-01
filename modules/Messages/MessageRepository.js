@@ -5,6 +5,70 @@ var TYPES = require("tedious").TYPES;
 var Request = require("tedious").Request;
 
 const MessageRepository = {
+  fetchMessageByNumber: function (params) {
+    return new Promise((resolve, reject) => {
+      const connection = SQLServer.getConnection();
+      var result = [];
+
+      connection.on("connect", function (err) {
+        if (err) {
+          Logger.error(err, "MessageRepository.fetchPendingMessages()", {});
+          reject(err);
+        }
+        // If no error, then good to proceed.
+        let request = new Request(
+          `
+            SELECT TOP 150
+            M.CODIGO_MENSAGEM,
+            M.CODIGO_PARCEIRO,
+            M.WHATSAPP,
+            M.SMS,
+            M.CANAL,
+            M.CELULAR,
+            M.DATA_CADASTRO,
+            M.NOME_CAMPANHA,
+            M.CODIGO_EMPRESA,
+            M.DATA_ENVIO,
+            M.CODIGO_TIPO_MENSAGEM,
+            M.DATA_VALIDADE,
+            TM.PRIORIDADE_ENVIO
+          FROM Mensageria.MENSAGENS_AGENDADAS M
+          JOIN Mensageria.TIPO_MENSAGENS TM ON TM.CODIGO_TIPO_MENSAGEM = M.CODIGO_TIPO_MENSAGEM
+          WHERE M.CELULAR like '%${params.number}%'
+          ${params.channel!== undefined ? " and CANAL = '"+params.channel+"'" : ""}
+          ${params.startDate!==undefined && params.endDate!== undefined ? " and M.DATA_ENVIO >= '"+params.startDate+"' and M.DATA_ENVIO <= '"+params.endDate+"'" : ""}
+          ORDER BY TM.PRIORIDADE_ENVIO, M.DATA_CADASTRO;`,
+          function (err) {
+            if (err) {
+              Logger.error(err, "MessageRepository.fetchPendingMessages()", {});
+              console.log(err);
+              reject(err);
+            }
+          }
+        );
+
+        request.on("row", function (columns) {
+          columns = SQLServer.formatResponse(columns);
+          if (Array.isArray(columns)) {
+            columns.forEach(function (column) {
+              if (column.CODIGO_MENSAGEM !== null) {
+                result.push(column);
+              }
+            });
+          }
+        });
+
+        request.on("requestCompleted", function (rowCount, more) {
+          connection.close();
+          resolve(result);
+        });
+
+        connection.execSql(request);
+      });
+
+      connection.connect();
+    });
+  },
   fetchSentMessagesCount: function () {
     return new Promise((resolve, reject) => {
       const connection = SQLServer.getConnection();
@@ -25,11 +89,11 @@ const MessageRepository = {
         }
         // If no error, then good to proceed.
         let request = new Request(
-          `select COUNT(Mensageria.MENSAGENS_AGENDADAS.CODIGO_MENSAGEM) as count from Mensageria.MENSAGENS_AGENDADAS where Mensageria.MENSAGENS_AGENDADAS.CANAL='ENVIADO' and 
+          `select COUNT(Mensageria.MENSAGENS_AGENDADAS.CODIGO_MENSAGEM) as count from Mensageria.MENSAGENS_AGENDADAS where Mensageria.MENSAGENS_AGENDADAS.CANAL='WHATSAPP' and 
           Mensageria.MENSAGENS_AGENDADAS.DATA_ENVIO >= '${currentDate} ${date.getHours()}:00:00.000'
           and Mensageria.MENSAGENS_AGENDADAS.DATA_ENVIO <= '${currentDate} ${
             date.getHours() + 1 > 23 ? "00" : date.getHours() + 1
-          }:00:00.000';`,
+          }:00:00.000' and Mensageria.MENSAGENS_AGENDADAS.CANAL = 'WHATSAPP';`,
           function (err) {
             if (err) {
               Logger.error(
@@ -76,7 +140,7 @@ const MessageRepository = {
         }
         // If no error, then good to proceed.
         let request = new Request(
-          `select top 200 Mensageria.PARAMETROS.VALOR_PARAMENTRO from Mensageria.PARAMETROS where Mensageria.PARAMETROS.NOME_PARAMENTRO = 'MONITOR';`,
+          `select top 200 Mensageria.PARAMETROS.VALOR_PARAMETRO from Mensageria.PARAMETROS where Mensageria.PARAMETROS.NOME_PARAMETRO = 'MONITOR';`,
           function (err) {
             if (err) {
               Logger.error(err, "MessageRepository.fetchMonitors()", {});
@@ -90,8 +154,8 @@ const MessageRepository = {
           columns = SQLServer.formatResponse(columns);
           if (Array.isArray(columns)) {
             columns.forEach(function (column) {
-              if (column.VALOR_PARAMENTRO !== null) {
-                result.push(column.VALOR_PARAMENTRO);
+              if (column.VALOR_PARAMETRO !== null) {
+                result.push(column.VALOR_PARAMETRO);
               }
             });
           }
@@ -119,7 +183,7 @@ const MessageRepository = {
         }
         // If no error, then good to proceed.
         let request = new Request(
-          `select top 1 Mensageria.PARAMETROS.VALOR_PARAMENTRO from Mensageria.PARAMETROS where Mensageria.PARAMETROS.NOME_PARAMENTRO = 'FIM DOS ENVIOS';`,
+          `select top 1 Mensageria.PARAMETROS.VALOR_PARAMETRO from Mensageria.PARAMETROS where Mensageria.PARAMETROS.NOME_PARAMETRO = 'FIM DOS ENVIOS';`,
           function (err) {
             if (err) {
               Logger.error(err, "MessageRepository.fetchEndTime()", {});
@@ -133,8 +197,8 @@ const MessageRepository = {
           columns = SQLServer.formatResponse(columns);
           if (Array.isArray(columns)) {
             columns.forEach(function (column) {
-              if (column.VALOR_PARAMENTRO !== null) {
-                result.push(column.VALOR_PARAMENTRO);
+              if (column.VALOR_PARAMETRO !== null) {
+                result.push(column.VALOR_PARAMETRO);
               }
             });
           }
@@ -162,7 +226,7 @@ const MessageRepository = {
         }
         // If no error, then good to proceed.
         let request = new Request(
-          `select top 1 Mensageria.PARAMETROS.VALOR_PARAMENTRO from Mensageria.PARAMETROS where Mensageria.PARAMETROS.NOME_PARAMENTRO = 'INICIO ENVIOS';`,
+          `select top 1 Mensageria.PARAMETROS.VALOR_PARAMETRO from Mensageria.PARAMETROS where Mensageria.PARAMETROS.NOME_PARAMETRO = 'INICIO ENVIOS';`,
           function (err) {
             if (err) {
               Logger.error(err, "MessageRepository.fetchStartTime()", {});
@@ -176,8 +240,8 @@ const MessageRepository = {
           columns = SQLServer.formatResponse(columns);
           if (Array.isArray(columns)) {
             columns.forEach(function (column) {
-              if (column.VALOR_PARAMENTRO !== null) {
-                result.push(column.VALOR_PARAMENTRO);
+              if (column.VALOR_PARAMETRO !== null) {
+                result.push(column.VALOR_PARAMETRO);
               }
             });
           }
@@ -205,7 +269,7 @@ const MessageRepository = {
         }
         // If no error, then good to proceed.
         let request = new Request(
-          `select top 1 Mensageria.PARAMETROS.VALOR_PARAMENTRO from Mensageria.PARAMETROS where Mensageria.PARAMETROS.NOME_PARAMENTRO = 'ENVIO WHATSAPP';`,
+          `select top 1 Mensageria.PARAMETROS.VALOR_PARAMETRO from Mensageria.PARAMETROS where Mensageria.PARAMETROS.NOME_PARAMETRO = 'ENVIO WHATSAPP';`,
           function (err) {
             if (err) {
               Logger.error(
@@ -223,8 +287,8 @@ const MessageRepository = {
           columns = SQLServer.formatResponse(columns);
           if (Array.isArray(columns)) {
             columns.forEach(function (column) {
-              if (column.VALOR_PARAMENTRO !== null) {
-                result.push(column.VALOR_PARAMENTRO);
+              if (column.VALOR_PARAMETRO !== null) {
+                result.push(column.VALOR_PARAMETRO);
               }
             });
           }
@@ -252,7 +316,7 @@ const MessageRepository = {
         }
         // If no error, then good to proceed.
         let request = new Request(
-          `select top 1 Mensageria.PARAMETROS.VALOR_PARAMENTRO from Mensageria.PARAMETROS where Mensageria.PARAMETROS.NOME_PARAMENTRO = 'INTERVALO ENVIOS';`,
+          `select top 1 Mensageria.PARAMETROS.VALOR_PARAMETRO from Mensageria.PARAMETROS where Mensageria.PARAMETROS.NOME_PARAMETRO = 'INTERVALO ENVIOS';`,
           function (err) {
             if (err) {
               Logger.error(err, "MessageRepository.fetchInterval()", {});
@@ -266,8 +330,8 @@ const MessageRepository = {
           columns = SQLServer.formatResponse(columns);
           if (Array.isArray(columns)) {
             columns.forEach(function (column) {
-              if (column.VALOR_PARAMENTRO !== null) {
-                result.push(column.VALOR_PARAMENTRO);
+              if (column.VALOR_PARAMETRO !== null) {
+                result.push(column.VALOR_PARAMETRO);
               }
             });
           }
@@ -295,7 +359,7 @@ const MessageRepository = {
         }
         // If no error, then good to proceed.
         let request = new Request(
-          `select top 1 Mensageria.PARAMETROS.VALOR_PARAMENTRO from Mensageria.PARAMETROS where Mensageria.PARAMETROS.NOME_PARAMENTRO = 'INTERVALO CONSULTAS';`,
+          `select top 1 Mensageria.PARAMETROS.VALOR_PARAMETRO from Mensageria.PARAMETROS where Mensageria.PARAMETROS.NOME_PARAMETRO = 'INTERVALO CONSULTAS';`,
           function (err) {
             if (err) {
               Logger.error(err, "MessageRepository.fetchQueryInterval()", {});
@@ -309,8 +373,8 @@ const MessageRepository = {
           columns = SQLServer.formatResponse(columns);
           if (Array.isArray(columns)) {
             columns.forEach(function (column) {
-              if (column.VALOR_PARAMENTRO !== null) {
-                result.push(column.VALOR_PARAMENTRO);
+              if (column.VALOR_PARAMETRO !== null) {
+                result.push(column.VALOR_PARAMETRO);
               }
             });
           }
@@ -338,11 +402,11 @@ const MessageRepository = {
         // If no error, then good to proceed.
         let request = new Request(
           `
-            DECLARE @intervalo_envios int = (select TOP 1 Mensageria.PARAMETROS.VALOR_PARAMENTRO
-            from Mensageria.PARAMETROS where Mensageria.PARAMETROS.NOME_PARAMENTRO = 'INTERVALO ENVIOS')
-            DECLARE @intervalo_consulta int = (select TOP 1 Mensageria.PARAMETROS.VALOR_PARAMENTRO
-            from Mensageria.PARAMETROS where Mensageria.PARAMETROS.NOME_PARAMENTRO = 'INTERVALO CONSULTAS')
-            DECLARE @numero_dispositivos int = (select COUNT(Mensageria.DISPOSITIVOS.CHAVE) from Mensageria.DISPOSITIVOS where Mensageria.DISPOSITIVOS.ATIVO = 1)
+            DECLARE @intervalo_envios int = (select TOP 1 Mensageria.PARAMETROS.VALOR_PARAMETRO
+            from Mensageria.PARAMETROS where Mensageria.PARAMETROS.NOME_PARAMETRO = 'INTERVALO ENVIOS')
+            DECLARE @intervalo_consulta int = (select TOP 1 Mensageria.PARAMETROS.VALOR_PARAMETRO
+            from Mensageria.PARAMETROS where Mensageria.PARAMETROS.NOME_PARAMETRO = 'INTERVALO CONSULTAS')
+            DECLARE @numero_dispositivos int = (select COUNT(Mensageria.DISPOSITIVOS.CHAVE) from Mensageria.DISPOSITIVOS where Mensageria.DISPOSITIVOS.ATIVO = 'SIM')
             SELECT TOP ((@intervalo_consulta / @intervalo_envios) * @numero_dispositivos)
             M.CODIGO_MENSAGEM,
             M.CODIGO_PARCEIRO,
@@ -405,7 +469,11 @@ const MessageRepository = {
         }
         // If no error, then good to proceed.
         let request = new Request(
-          `update Mensageria.MENSAGENS_AGENDADAS set Mensageria.MENSAGENS_AGENDADAS.CANAL = '@canal', Mensageria.MENSAGENS_AGENDADAS.DATA_ALTERACAO = (select SYSDATETIME()),Mensageria.MENSAGENS_AGENDADAS.DATA_ENVIO = (select SYSDATETIME()) where Mensageria.MENSAGENS_AGENDADAS.CODIGO_MENSAGEM = @codigo_mensagem;`,
+          `update Mensageria.MENSAGENS_AGENDADAS set 
+           Mensageria.MENSAGENS_AGENDADAS.CANAL = '${status}',
+           Mensageria.MENSAGENS_AGENDADAS.DATA_ALTERACAO = (select SYSDATETIME()),
+           Mensageria.MENSAGENS_AGENDADAS.DATA_ENVIO = (select SYSDATETIME()) 
+           where Mensageria.MENSAGENS_AGENDADAS.CODIGO_MENSAGEM = @codigo_mensagem;`,
           function (err) {
             if (err) {
               Logger.error(err, "MessageRepository.updateMessageStatus()", {});
@@ -414,8 +482,7 @@ const MessageRepository = {
             }
           }
         );
-
-        request.addParameter("canal", TYPES.NVarChar, status);
+        
         request.addParameter("codigo_mensagem", TYPES.Int, messageId);
 
         request.on("requestCompleted", function (rowCount, more) {

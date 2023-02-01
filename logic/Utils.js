@@ -1,4 +1,12 @@
 const Utils = {
+  isDate: function(date) {
+    try {
+    return date.toString() !== "Invalid Date"
+    } catch(err) {
+      console.log(err);
+      return false;
+    }
+  },
   isJson: function (str) {
     try {
       if (typeof str === "string") {
@@ -42,6 +50,22 @@ const Utils = {
         { timeZone: tzString }
       )
     );
+  },
+  formatUnicodeToEmojisInText: function (text) {
+    try {
+      if (text !== undefined && text !== null && typeof text === "string") {
+        let exp = new RegExp(/[#][$]\w{1,5}/g);
+        return text.replaceAll(exp, function (value) {
+          let emoji = String.fromCodePoint(
+            parseInt(value.replace("#$", "").trim(), 16)
+          );
+          return emoji !== undefined && emoji !== null ? emoji : "";
+        });
+      } else return text;
+    } catch (err) {
+      console.log(err);
+      return text;
+    }
   },
 };
 

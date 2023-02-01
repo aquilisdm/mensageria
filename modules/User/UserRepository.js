@@ -165,7 +165,7 @@ const UserRepository = {
         }
         // If no error, then good to proceed.
         let request = new Request(
-          `insert into Mensageria.USUARIOS_MENSAGERIA (CODIGO_USUARIO,NOME_USUARIO,CODIGO_EMPRESA,SENHA) values ((SELECT ABS(CAST(CAST(NEWID() AS VARBINARY) AS INT)) AS UniqId),'@NOME_USUARIO',@CODIGO_EMPRESA,'@SENHA');`,
+          `insert into Mensageria.USUARIOS_MENSAGERIA (NOME_USUARIO,CODIGO_EMPRESA,SENHA) values ('${name}',@CODIGO_EMPRESA,'${password}');`,
           function (err) {
             if (err) {
               console.log(err);
@@ -179,9 +179,8 @@ const UserRepository = {
           }
         );
 
-        request.addParameter("NOME_USUARIO", TYPES.NVarChar, name);
         request.addParameter("CODIGO_EMPRESA", TYPES.Int, company);
-        request.addParameter("SENHA", TYPES.NVarChar, password);
+        //request.addParameter("SENHA", TYPES.NVarChar, password);
 
         request.on("requestCompleted", function (rowCount, more) {
           connection.close();

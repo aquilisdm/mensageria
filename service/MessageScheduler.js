@@ -14,8 +14,8 @@ const BASE = "MessageScheduler:";
 var intervalEvent = null;
 var queryIntervalEvent = null;
 var monitorIntervalEvent = null;
-var intervalCount = 2000; //default
-var queryInterval = 600000; //default
+var intervalCount = null;
+var queryInterval = null;
 
 /*
  * Functions
@@ -60,10 +60,13 @@ async function shouldSendWhatsApp() {
   }
 }
 
-function selectRandomDevice(deviceList) {
+function selectSeqDevice(deviceList) {
   if (Array.isArray(deviceList) && deviceList.length > 0) {
-    let index = Math.floor(Math.random() * deviceList.length);
-    return deviceList[index].clientId;
+    if (global.lastDeviceIndex + 1 > deviceList.length - 1) {
+      global.lastDeviceIndex = 0;
+    } else global.lastDeviceIndex = global.lastDeviceIndex + 1;
+
+    return deviceList[global.lastDeviceIndex].clientId;
   }
 
   return undefined;
@@ -125,7 +128,7 @@ async function sendLogsToMonitors() {
     if (Array.isArray(monitors) && monitors.length > 0) {
       let allCompanyDevices = await fetchAllCompanyDevices();
       //Company id number 1 is always 'Zap Grafica'
-      let currentClientId = selectRandomDevice(allCompanyDevices[1]);
+      let currentClientId = selectSeqDevice(allCompanyDevices[1]);
       let currentDate = Utils.convertTZ(new Date(), "America/Sao_Paulo")
         .toLocaleDateString()
         .split("/");
@@ -169,9 +172,10 @@ async function fetchPendingMessages() {
         pendingMessages.forEach((message) => {
           global.scheduledQueue.push(message);
         });
+
+        global.eventEmitter.emit("queueMove", pendingMessages);
       }
-    }
-    else {
+    } else {
       global.scheduledQueue = [];
     }
   } catch (err) {
@@ -179,74 +183,64 @@ async function fetchPendingMessages() {
   }
 }
 
-async function processQueue() {
+async function processQueueOne() {
   try {
     if (await shouldSendWhatsApp()) {
-      let pendingMessages = Array.from(global.scheduledQueue);
+      let pendingMessage = global.scheduledQueue.shift();
       let allCompanyDevices = await fetchAllCompanyDevices();
       let currentClientId = null;
       let formattedNumber = null;
 
-      if (
-        pendingMessages !== null &&
-        pendingMessages !== undefined &&
-        pendingMessages.length > 0
-      ) {
+      if (pendingMessage !== null && pendingMessage !== undefined) {
         //Send messages
-        for (let i = 0; i < pendingMessages.length; i++) {
-          formattedNumber = Utils.formatNumber(pendingMessages[i].CELULAR);
-          currentClientId = selectRandomDevice(
-            allCompanyDevices[pendingMessages[i].CODIGO_EMPRESA]
-          );
+        formattedNumber = Utils.formatNumber(pendingMessage.CELULAR);
+        currentClientId = selectSeqDevice(
+          allCompanyDevices[pendingMessage.CODIGO_EMPRESA]
+        );
 
-          if (
-            formattedNumber !== null &&
-            currentClientId !== undefined &&
-            currentClientId !== null
-          ) {
-            response = await MessageService.sendTextMessage(
-              currentClientId,
-              formattedNumber,
-              pendingMessages[i].WHATSAPP
-            ).catch((err) => {
-              response = {
-                success: false,
-                message: err,
-              };
-            });
-          } else
+        if (
+          formattedNumber !== null &&
+          currentClientId !== undefined &&
+          currentClientId !== null
+        ) {
+          response = await MessageService.sendTextMessage(
+            currentClientId,
+            formattedNumber,
+            Utils.formatUnicodeToEmojisInText(pendingMessage.WHATSAPP)
+          ).catch((err) => {
             response = {
               success: false,
-              message: "The phone number or the clientId is invalid",
+              message: err,
             };
+          });
+        } else
+          response = {
+            success: false,
+            message: "The phone number or the clientId is invalid",
+          };
 
-          if (response.success === false) {
-            MessageRepository.updateMessageStatus(
-              pendingMessages[i].CODIGO_MENSAGEM,
-              "FALHA"
-            );
+        if (response.success === false) {
+          MessageRepository.updateMessageStatus(
+            pendingMessage.CODIGO_MENSAGEM,
+            "FALHA"
+          );
 
-            Logger.error(response.message, "MessageScheduler.processQueue()", {
-              targetNumber: pendingMessages[i].CELULAR,
-              formattedTargerNumber: formattedNumber,
-              clientId: currentClientId,
-              messageId: pendingMessages[i].CODIGO_MENSAGEM,
-            });
-          } else {
-            MessageRepository.updateMessageStatus(
-              pendingMessages[i].CODIGO_MENSAGEM,
-              "ENVIADO"
-            );
-          }
-
-          //Remove message from memory
-          global.scheduledQueue.shift();
+          Logger.error(response.message, "MessageScheduler.processQueue()", {
+            targetNumber: pendingMessage.CELULAR,
+            formattedTargerNumber: formattedNumber,
+            clientId: currentClientId,
+            messageId: pendingMessage.CODIGO_MENSAGEM,
+          });
+        } else {
+          MessageRepository.updateMessageStatus(
+            pendingMessage.CODIGO_MENSAGEM,
+            "WHATSAPP"
+          );
         }
       }
     }
   } catch (err) {
     console.log(err);
-    global.scheduledQueue.shift();
     Logger.error(err, "MessageScheduler.processQueue()", {});
   }
 }
@@ -272,7 +266,7 @@ const MessageScheduler = {
     } else {
       console.log(
         BASE +
-          " [Message interval] could not be fetched, using the default value..."
+          " [Message interval] could not be fetched, event will not start..."
       );
     }
 
@@ -286,23 +280,22 @@ const MessageScheduler = {
       queryInterval = parseFloat(queryInt[0]) * 1000.0; //convert to milliseconds
     } else {
       console.log(
-        BASE +
-          " [Query interval] could not be fetched, using the default value..."
+        BASE + " [Query interval] could not be fetched, event will not start..."
       );
     }
 
     //Initialize message distribution event
-    if (intervalEvent === null) {
-      intervalEvent = setInterval(processQueue, intervalCount);
+    if (intervalEvent === null && intervalCount !== null) {
+      intervalEvent = setInterval(processQueueOne, intervalCount);
       console.log(BASE + " Message interval event has been started");
     } else {
       clearTimeout(intervalEvent);
-      intervalEvent = setInterval(processQueue, intervalCount);
+      intervalEvent = setInterval(processQueueOne, intervalCount);
       console.log(BASE + " Message interval event has been re-started");
     }
 
     //Initialize query event
-    if (queryIntervalEvent === null) {
+    if (queryIntervalEvent === null && queryInterval !== null) {
       queryIntervalEvent = setInterval(fetchPendingMessages, queryInterval);
       console.log(BASE + " Query event has been started");
     } else {
@@ -338,9 +331,9 @@ const MessageScheduler = {
     clearTimeout(queryIntervalEvent);
     clearTimeout(monitorIntervalEvent);
   },
-  test: function() {
+  test: function () {
     return MessageRepository.fetchSentMessagesCount();
-  }
+  },
 };
 
 module.exports = MessageScheduler;

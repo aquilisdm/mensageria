@@ -49,6 +49,7 @@ const UserService = {
   },
   createUser: function (name, password, company) {
     return new Promise(async (resolve, reject) => {
+      company = typeof company !== 'string' ? company.toString() : company;
       if (
         validator.isLength(name, { min: 1, max: 60 }) &&
         validator.isLength(password, { min: 1, max: 64 }) &&

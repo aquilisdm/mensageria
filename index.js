@@ -9,6 +9,7 @@ global.queue = [];
 global.scheduledQueue = [];
 global.eventEmitter = new EventEmitter();
 global.eventEmitter.setMaxListeners(80);
+global.lastDeviceIndex = 0;
 const MessagesController = require("./modules/Messages/MessagesController");
 const ClientController = require("./modules/Client/ClientController");
 const UserController = require("./modules/User/UserController");
@@ -93,6 +94,7 @@ process.on("exit", (code) => {
   console.log(`Emptying queue...`);
   global.eventEmitter.removeAllListeners("addMessage");
   global.eventEmitter.removeAllListeners("removeMessage");
+  global.eventEmitter.removeAllListeners("queueMove");
   global.queue = [];
   global.scheduledQueue = [];
   MessageScheduler.stop();

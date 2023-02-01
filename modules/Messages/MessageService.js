@@ -1,15 +1,19 @@
 const { Client, LocalAuth } = require("whatsapp-web.js");
 const qrcode = require("qrcode-terminal");
 const Logger = require("../../logic/Logger");
-const MessageRepository = require('./MessageRepository');
+const MessageRepository = require("./MessageRepository");
 const { v4: uuidv4 } = require("uuid");
 const ClientManager = require("../Client/ClientManager");
 const EventEmitter = require("events");
 const eventEmitter = new EventEmitter();
+const Utils = require("../../logic/Utils");
 eventEmitter.setMaxListeners(120);
 
 eventEmitter.on("newClient", function (clientId, userId) {
-  if (global.clientMap[clientId] !== null && global.clientMap[clientId] !== undefined) {
+  if (
+    global.clientMap[clientId] !== null &&
+    global.clientMap[clientId] !== undefined
+  ) {
     global.clientMap[clientId].on("disconnected", () => {
       console.log(
         "Device has been disconnected " +
@@ -51,6 +55,42 @@ function establishOrCreateConnection(clientId) {
 }
 
 const MessageService = {
+  fetchMessagesByNumber: function (params) {
+    if (params.number !== undefined && params.length <= 14) {
+      if (
+        Utils.isDate(new Date(params.startDate)) &&
+        Utils.isDate(new Date(params.endDate))
+      ) {
+        let startDate = new Date(params.startDate);
+        let endDate = new Date(params.endDate);
+
+        let startDateArray = startDate.toLocaleDateString().split("/");
+        let endDateArray = endDate.toLocaleDateString().split("/");
+        params.startDate =
+          startDateArray[2] +
+          "-" +
+          startDateArray[1] +
+          "-" +
+          startDateArray[0] +
+          " " +
+          startDate.toLocaleTimeString().replace("PM", "").replace("AM", "").trim();
+
+        params.endDate =
+          endDateArray[2] +
+          "-" +
+          endDateArray[1] +
+          "-" +
+          endDateArray[0] +
+          " " +
+          endDate.toLocaleTimeString().replace("PM", "").replace("AM", "").trim();
+      }
+
+      return MessageRepository.fetchMessagesByNumber(params);
+    } else
+      return new Promise((resolve, reject) => {
+        resolve([]);
+      });
+  },
   startConnection: function () {
     return new Promise(async (resolve, reject) => {
       resolve({ success: await establishOrCreateConnection() });
@@ -218,7 +258,7 @@ const MessageService = {
           );
           //Save the connection
           global.clientMap[uniqueRandomID] = client;
-          eventEmitter.emit("newClient", uniqueRandomID,userId);
+          eventEmitter.emit("newClient", uniqueRandomID, userId);
           client.info.uniqueRandomID = uniqueRandomID;
           Logger.info(client.info, "MessageService.authenticate()");
           client.removeAllListeners("qr");

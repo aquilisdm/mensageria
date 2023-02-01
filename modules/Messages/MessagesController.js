@@ -12,6 +12,9 @@ const opts = {
   duration: 1, // Per second
 };
 
+//String.fromCodePoint(parseInt("1F602",16));
+//#$1F60A
+
 function writeServerSendEvent(res, sseId, data) {
   res.write("id: " + sseId + "\n");
   res.write("data: " + data + "\n\n");
@@ -19,6 +22,50 @@ function writeServerSendEvent(res, sseId, data) {
 
 router.get("/", function (req, res, next) {
   return res.json({ message: "Message Endpoint" });
+});
+
+router.post("/searchMessageByNumber", function (req, res, next) {
+  MessageService.fetchMessageByNumber({
+    number: req.body.number,
+    channel: req.body.channel, 
+    startDate: req.body.startDate,
+    endDate: req.body.endDate,
+  })
+    .then((result) => {
+      if (Array.isArray(result)) return res.json(result);
+      else return res.json([]);
+    })
+    .catch((err) => {
+      console.log(err);
+      return res.json([]);
+    });
+});
+
+router.get("/listenToMessageQueue/:token", function (req, res, next) {
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    Connection: "keep-alive",
+  });
+
+  var ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+  if (ip == undefined || ip == null) {
+    ip = req.headers[req.params.token];
+  }
+
+  let decoded = Authentication.verifyToken(req.params.token);
+
+  req.on("end", function () {
+    console.log("End of request");
+    eventEmitter.removeAllListeners("queueMove");
+  });
+
+  if (decoded !== null) {
+    var sseId = new Date().toLocaleTimeString();
+    global.eventEmitter.on("queueMove", function (msgs) {
+      writeServerSendEvent(res, sseId, JSON.stringify(msgs));
+    });
+  } else res.status(401).json({ success: false, message: "Token is invalid" });
 });
 
 router.get("/startConnection/:clientId", function (req, res, next) {
@@ -103,9 +150,13 @@ router.get("/requestQR/:token", function (req, res, next) {
   if (decoded !== null) {
     var sseId = new Date().toLocaleTimeString();
 
-    MessageService.authenticate((response) => {
-      writeServerSendEvent(res, sseId, JSON.stringify(response));
-    }, decoded.userId,ip);
+    MessageService.authenticate(
+      (response) => {
+        writeServerSendEvent(res, sseId, JSON.stringify(response));
+      },
+      decoded.userId,
+      ip
+    );
   } else res.status(401).json({ success: false, message: "Token is invalid" });
 });
 

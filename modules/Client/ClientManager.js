@@ -23,7 +23,7 @@ const ClientManager = {
         }
         // If no error, then good to proceed.
         let request = new Request(
-          `select top 200 Mensageria.DISPOSITIVOS.CHAVE as clientId,Mensageria.DISPOSITIVOS.DEVICE_INFO as deviceInfo,Mensageria.DISPOSITIVOS.CODIGO_CADASTRADOR as userId from Mensageria.DISPOSITIVOS where CODIGO_EMPRESA = @id and ATIVO = 1;`,
+          `select top 200 Mensageria.DISPOSITIVOS.CHAVE as clientId,Mensageria.DISPOSITIVOS.DEVICE_INFO as deviceInfo,Mensageria.DISPOSITIVOS.CODIGO_CADASTRADOR as userId from Mensageria.DISPOSITIVOS where CODIGO_EMPRESA = @id and ATIVO = 'SIM';`,
           function (err) {
             if (err) {
               console.log(err);
@@ -111,6 +111,10 @@ const ClientManager = {
     });
   },
   setClientId: function (clientId, deviceInfo, userId, ip) {
+    console.log(clientId);
+    console.log(userId);
+    console.log(ip);
+    console.log(JSON.stringify(deviceInfo));
     return new Promise((resolve, reject) => {
       const connection = SQLServer.getConnection();
       var result = [];
@@ -138,7 +142,7 @@ const ClientManager = {
             deviceInfo !== null &&
             deviceInfo.wid !== undefined
             ? deviceInfo.wid.user
-            : "NOT AVAILABLE"
+            : "0"
         );
         request.addParameter("STATUS", TYPES.NVarChar, "ACTIVE");
         request.addParameter("CODIGO_CADASTRADOR", TYPES.Int, userId);
@@ -154,7 +158,7 @@ const ClientManager = {
             : "NOT AVAILABLE"
         );
         request.addParameter("CHAVE", TYPES.NVarChar, clientId);
-        request.addParameter("ATIVO", TYPES.NVarChar, "1");
+        request.addParameter("ATIVO", TYPES.NVarChar, "SIM");
         request.addParameter(
           "DEVICE_INFO",
           TYPES.NVarChar,
