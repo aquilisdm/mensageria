@@ -30,7 +30,6 @@ const MessageDispatcher = require("./service/MessageDispatcher");
 const WhatsAppScheduler = require("./service/WhatsAppScheduler");
 
 //Hermod
-//https://wpmessager-fec1d.firebaseapp.com/
 //https://support.huaweicloud.com/intl/en-us/devg-msgsms/sms_04_0008.html
 //https://support.huaweicloud.com/intl/en-us/usermanual-msgsms/sms_03_0011.html
 //https://developer.huawei.com/consumer/en/service/josp/agc/index.html#/unrealName

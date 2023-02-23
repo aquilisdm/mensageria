@@ -36,6 +36,7 @@ async function processQueueOne() {
       let formattedNumber = null;
       let device = null;
       if (pendingMessage !== null && pendingMessage !== undefined) {
+        console.log("Sending message with code: "+pendingMessage.CODIGO_MENSAGEM);
         if (
           pendingMessage.ACEITA_WHATSAPP !== undefined &&
           pendingMessage.ACEITA_WHATSAPP === "SIM"
@@ -75,6 +76,7 @@ async function processQueueOne() {
             };
 
           if (response.success === false) {
+            console.log("Message with code: "+pendingMessage.CODIGO_MENSAGEM+" failed");
             MessageRepository.updateMessageStatus(
               pendingMessage.CODIGO_MENSAGEM,
               Constants.CHANNEL.failed,
@@ -101,6 +103,7 @@ async function processQueueOne() {
               status: "failed",
             });
           } else if (response.success === true) {
+            console.log("Message with code "+pendingMessage.CODIGO_MENSAGEM+" was sent");
             MessageRepository.updateMessageStatus(
               pendingMessage.CODIGO_MENSAGEM,
               Constants.CHANNEL.sentViaWhatsApp,

@@ -37,9 +37,10 @@ const Utils = {
 
       if (regExp.test(number)) {
         if (number.length >= 10 && number.length <= 12) {
-          return "55" + number;
+          number = "55" + number;
+          return number.trim();
         } else if (number.length >= 13 && number.length <= 14) {
-          return number;
+          return number.trim();
         }
       }
     }

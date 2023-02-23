@@ -21,6 +21,7 @@ eventEmitter.on("newClient", async function (clientId, userId) {
           " at " +
           new Date().toString()
       );
+
       Logger.info(
         clientId + " has been disconnected",
         "MessageService.eventEmitter",
@@ -39,18 +40,18 @@ function establishOrCreateConnection(clientId) {
   return new Promise(async (resolve, reject) => {
     if (global.clientMap[clientId] === undefined) {
       global.clientMap[clientId] = ClientManager.createClientSession(clientId);
-
+      
       try {
         //Initialize the client
         await global.clientMap[clientId].initialize();
+       
         resolve(true);
       } catch (err) {
         console.log(err);
+        delete global.clientMap[clientId];
         resolve(false);
       }
-    } else {
-      resolve(true);
-    }
+    } else resolve(true);
   });
 }
 
@@ -301,13 +302,15 @@ const MessageService = {
 
         client.on("ready", async () => {
           //console.log("Client is ready!");
-          //console.log("ID: " + uniqueRandomID);
+          console.log("ID: " + uniqueRandomID);
+
           await ClientManager.setClientId(
             uniqueRandomID,
             client.info !== undefined ? client.info : {},
             userId,
             ip
           );
+
           //Save the connection
           global.clientMap[uniqueRandomID] = client;
           eventEmitter.emit("newClient", uniqueRandomID, userId);

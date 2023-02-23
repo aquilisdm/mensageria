@@ -25,6 +25,65 @@ router.get("/", function (req, res, next) {
 });
 
 router.post(
+  "/sendTextMessage",
+  Authentication.verifyTokenMiddleware,
+  function (req, res, next) {
+    var ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+    if (ip == undefined || ip == null) {
+      ip = req.headers["x-access-token"];
+    }
+
+    const rateLimiter = new RateLimiterMemory(opts);
+
+    rateLimiter
+      .consume(ip, 1) // consume 1 point
+      .then((rateLimiterRes) => {
+        // 1 point consumed
+        MessageService.sendWhatsAppMessage(
+          req.body.clientId,
+          req.body.number,
+          req.body.message
+        )
+          .then((response) => {
+            return res.json({
+              success: response.success,
+              message: response.message,
+            });
+          })
+          .catch((err) => {
+            console.log(err);
+            Logger.error(
+              err,
+              "/wp-messages/wp-messages/messages/sendTextMessage",
+              {
+                ip: ip,
+                user: req.userData.userId,
+              }
+            );
+
+            return res.json({
+              success: false,
+              message:
+                "Message could not be sent due to internal error, please check the logs for more details",
+            });
+          });
+      })
+      .catch((rateLimiterRes) => {
+        Logger.info(
+          "Address: " + ip + " - " + rateLimiterRes,
+          "/wp-messages/messages/sendTextMessage",
+          { ip: ip, user: req.userData.userId }
+        );
+        // Not enough points to consume
+        return res.status(204).json({
+          success: false,
+          message: "Too many requests",
+        });
+      });
+  }
+);
+
+router.post(
   "/searchMessageByNumber",
   Authentication.verifyTokenMiddleware,
   function (req, res, next) {
