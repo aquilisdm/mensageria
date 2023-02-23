@@ -1,32 +1,7 @@
 const MongoDB = require("./MongoDB");
+const Utils = require("./Utils");
 
 const Logger = {
-  message: function (message, status) {
-    return new Promise(async (resolve, reject) => {
-      MongoDB.getDatabase()
-        .then(async (client) => {
-          const database = client.db(MongoDB.dbName);
-          const collection = database.collection("message_logs");
-
-          await collection.insertOne({
-            level: "message",
-            clientId: message.clientId,
-            message: message.message,
-            number: message.number,
-            ip: message.ip,
-            status: status,
-            date: new Date().toString(),
-          });
-
-          client.close();
-          resolve(true);
-        })
-        .catch((err) => {
-          console.log(err);
-          resolve(false);
-        });
-    });
-  },
   error: function (err, location, additionalDetails) {
     return new Promise(async (resolve, reject) => {
       MongoDB.getDatabase()
@@ -38,8 +13,9 @@ const Logger = {
             level: "error",
             message: err,
             endpoint: location,
-            date: new Date().toString(),
-            additionalDetails: additionalDetails !== undefined ? additionalDetails : {},
+            date: Utils.convertTZ(new Date(), "America/Sao_Paulo").toString(),
+            additionalDetails:
+              additionalDetails !== undefined ? additionalDetails : {},
           });
 
           client.close();
@@ -62,7 +38,7 @@ const Logger = {
             level: "info",
             message: info,
             endpoint: location,
-            date: new Date().toString(),
+            date: Utils.convertTZ(new Date(), "America/Sao_Paulo").toString(),
             additionalDetails:
               additionalDetails !== undefined ? additionalDetails : {},
           });

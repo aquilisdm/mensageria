@@ -4,21 +4,40 @@ const session = require("express-session");
 const dotEnv = require("dotenv");
 const process = require("node:process");
 const EventEmitter = require("events");
+const cors = require("cors");
 global.clientMap = {};
-global.queue = [];
 global.scheduledQueue = [];
+global.smsScheduledQueue = [];
+global.intervalEvent = null;
+global.queryIntervalEvent = null;
+global.smsIntervalEvent = null;
+global.smsQueryIntervalEvent = null;
+global.eventSessionInfo = {
+  intervalEventTime: undefined,
+  queryEventTime: undefined,
+};
 global.eventEmitter = new EventEmitter();
 global.eventEmitter.setMaxListeners(80);
 global.lastDeviceIndex = 0;
+
 const MessagesController = require("./modules/Messages/MessagesController");
+const MessageCore = require('./service/MessageCore');
 const ClientController = require("./modules/Client/ClientController");
 const UserController = require("./modules/User/UserController");
 const ConfigController = require("./modules/Config/ConfigController");
 const CompanyController = require("./modules/Company/CompanyController");
-const cors = require("cors");
 const MessageDispatcher = require("./service/MessageDispatcher");
-const MessageScheduler = require("./service/MessageScheduler");
+const WhatsAppScheduler = require("./service/WhatsAppScheduler");
+
 //Hermod
+//https://wpmessager-fec1d.firebaseapp.com/
+//https://support.huaweicloud.com/intl/en-us/devg-msgsms/sms_04_0008.html
+//https://support.huaweicloud.com/intl/en-us/usermanual-msgsms/sms_03_0011.html
+//https://developer.huawei.com/consumer/en/service/josp/agc/index.html#/unrealName
+
+//https://developer.huawei.com/consumer/en/doc/start/api-0000001062522591
+//https://console-intl.huaweicloud.com/msgsms/?region=ap-southeast-1&locale=en-us#/msgsms/overview
+
 //Start server
 //pm2 start index.js --name wpmsg
 
@@ -95,12 +114,11 @@ process.on("exit", (code) => {
   global.eventEmitter.removeAllListeners("addMessage");
   global.eventEmitter.removeAllListeners("removeMessage");
   global.eventEmitter.removeAllListeners("queueMove");
-  global.queue = [];
   global.scheduledQueue = [];
-  MessageScheduler.stop();
+  MessageCore.stop();
 });
 
 app.listen(2000, function () {
   console.log("Starting server on", 2000);
-  MessageScheduler.start();
+  MessageCore.start();
 });

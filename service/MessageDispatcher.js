@@ -10,8 +10,9 @@ const { v4: uuidv4 } = require("uuid");
 /*
  * Declarations
  */
-const MAX_ITERATIONS_PER_MINUTE = 1000;
+const MAX_ITERATIONS_PER_MINUTE = 1024; //Maximum interactions per minute
 var interval = null;
+
 /*
  * Events
  */
@@ -32,9 +33,10 @@ global.eventEmitter.on("removeMessage", (msg) => {
     removeMessage(msg.id);
   }
 });
+
 /*
  * Functions
- */
+*/
 async function fetchMessagesByStatus(status) {
   let client = await MongoDB.getDatabase();
   const database = client.db(MongoDB.dbName);
@@ -133,6 +135,7 @@ async function processQueue() {
 
   thisQueue = [];
 }
+
 /*
  * Main
  */

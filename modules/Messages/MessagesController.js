@@ -24,22 +24,28 @@ router.get("/", function (req, res, next) {
   return res.json({ message: "Message Endpoint" });
 });
 
-router.post("/searchMessageByNumber", function (req, res, next) {
-  MessageService.fetchMessageByNumber({
-    number: req.body.number,
-    channel: req.body.channel, 
-    startDate: req.body.startDate,
-    endDate: req.body.endDate,
-  })
-    .then((result) => {
-      if (Array.isArray(result)) return res.json(result);
-      else return res.json([]);
+router.post(
+  "/searchMessageByNumber",
+  Authentication.verifyTokenMiddleware,
+  function (req, res, next) {
+    MessageService.fetchMessageByNumber({
+      number: req.body.number,
+      channel: req.body.channel,
+      channel2: req.body.channel2,
+      channel3: req.body.channel3,
+      startDate: req.body.startDate,
+      endDate: req.body.endDate,
     })
-    .catch((err) => {
-      console.log(err);
-      return res.json([]);
-    });
-});
+      .then((result) => {
+        if (Array.isArray(result)) return res.json(result);
+        else return res.json([]);
+      })
+      .catch((err) => {
+        console.log(err);
+        return res.json([]);
+      });
+  }
+);
 
 router.get("/listenToMessageQueue/:token", function (req, res, next) {
   res.writeHead(200, {
@@ -68,16 +74,6 @@ router.get("/listenToMessageQueue/:token", function (req, res, next) {
   } else res.status(401).json({ success: false, message: "Token is invalid" });
 });
 
-router.get("/startConnection/:clientId", function (req, res, next) {
-  MessageService.startConnection(req.params.clientId)
-    .then((response) => {
-      return response;
-    })
-    .catch((err) => {
-      return res.json({ success: false });
-    });
-});
-
 router.post("/logout", function (req, res, next) {
   MessageService.logout(req.body.clientId)
     .then(() => {
@@ -85,7 +81,7 @@ router.post("/logout", function (req, res, next) {
     })
     .catch((err) => {
       let ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
-      Logger.error(err, "/wp-messages/messages/logout", { ip: ip });
+      Logger.error(err, "logout", { ip: ip });
       return res.json({ success: false });
     });
 });
@@ -108,7 +104,7 @@ router.get(
             return res.json(info);
           })
           .catch((err) => {
-            Logger.error(err, "/wp-messages/messages/deviceInfo", {
+            Logger.error(err, "deviceInfo", {
               ip: ip,
               user: req.userData.userId,
             });
@@ -117,14 +113,10 @@ router.get(
       })
       .catch((rateLimiterRes) => {
         // Not enough points to consume
-        Logger.info(
-          "Address: " + ip + " - " + rateLimiterRes,
-          "/wp-messages/messages/deviceInfo",
-          {
-            ip: ip,
-            user: req.userData.userId,
-          }
-        );
+        Logger.info("Address: " + ip + " - " + rateLimiterRes, "deviceInfo", {
+          ip: ip,
+          user: req.userData.userId,
+        });
         return res.status(204).json({
           success: false,
           message: "Too many requests",
@@ -173,7 +165,7 @@ router.get(
       .catch((err) => {
         let ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
         console.log(err);
-        Logger.info(err, "/wp-messages/messages/getUserChatMessagesByChatId", {
+        Logger.info(err, "getUserChatMessagesByChatId", {
           ip: ip,
           user: req.userData.userId,
         });
@@ -200,13 +192,9 @@ router.get("/getUserChats/:clientId", function (req, res, next) {
         .catch((err) => {
           let ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
           console.log(err);
-          Logger.error(
-            err,
-            "/wp-messages/wp-messages/messages/getCurrentUserChats",
-            {
-              ip: ip,
-            }
-          );
+          Logger.error(err, "getCurrentUserChats", {
+            ip: ip,
+          });
           return res.json([]);
         });
     })
@@ -214,7 +202,7 @@ router.get("/getUserChats/:clientId", function (req, res, next) {
       console.log(rateLimiterRes);
       Logger.info(
         "Address: " + ip + " - " + rateLimiterRes,
-        "/wp-messages/wp-messages/messages/getCurrentUserChats",
+        "getCurrentUserChats",
         { ip: ip }
       );
       // Not enough points to consume
@@ -224,65 +212,6 @@ router.get("/getUserChats/:clientId", function (req, res, next) {
       });
     });
 });
-
-router.post(
-  "/sendTextMessage",
-  Authentication.verifyTokenMiddleware,
-  function (req, res, next) {
-    var ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
-    if (ip == undefined || ip == null) {
-      ip = req.headers["x-access-token"];
-    }
-
-    const rateLimiter = new RateLimiterMemory(opts);
-
-    rateLimiter
-      .consume(ip, 1) // consume 1 point
-      .then((rateLimiterRes) => {
-        // 1 point consumed
-        MessageService.sendTextMessage(
-          req.body.clientId,
-          req.body.number,
-          req.body.message
-        )
-          .then((response) => {
-            return res.json({
-              success: response.success,
-              message: response.message,
-            });
-          })
-          .catch((err) => {
-            console.log(err);
-            Logger.error(
-              err,
-              "/wp-messages/wp-messages/messages/sendTextMessage",
-              {
-                ip: ip,
-                user: req.userData.userId,
-              }
-            );
-
-            return res.json({
-              success: false,
-              message:
-                "Message could not be sent due to internal error, please check the logs for more details",
-            });
-          });
-      })
-      .catch((rateLimiterRes) => {
-        Logger.info(
-          "Address: " + ip + " - " + rateLimiterRes,
-          "/wp-messages/messages/sendTextMessage",
-          { ip: ip, user: req.userData.userId }
-        );
-        // Not enough points to consume
-        return res.status(204).json({
-          success: false,
-          message: "Too many requests",
-        });
-      });
-  }
-);
 
 router.post(
   "/addTextMessageToQueue",
@@ -298,41 +227,19 @@ router.post(
     rateLimiter
       .consume(ip, 1) // consume 1 point
       .then((rateLimiterRes) => {
-        if (
-          validator.isLength(req.body.clientId, { min: 1, max: 32 }) &&
-          fs.existsSync(
-            "/mnt/prod/wpmessager/.wwebjs_auth/session-" + req.body.clientId
-          )
-        ) {
-          global.eventEmitter.emit("addMessage", {
-            clientId: req.body.clientId,
-            number: req.body.number,
-            message: req.body.message,
-            ip: ip,
-          });
-
+        if (validator.isLength(req.body.number, { min: 1, max: 13 })) {
           return res.json({
             success: true,
             message: "Your message was added to the queue",
-          });
-        } else {
-          if (req.body.clientId.length == 32) {
-            ClientManager.deleteClient(req.body.clientId);
-          }
-          return res.json({
-            success: false,
-            message:
-              "The specified device is invalid or it may be disconnected, please make sure the device is properly connected to WhatsAppManager...",
           });
         }
       })
       .catch((rateLimiterRes) => {
         console.log(rateLimiterRes);
-        Logger.info(
-          "Address: " + ip + " - " + rateLimiterRes,
-          "/wp-messages/messages/addTextMessageToQueue",
-          { ip: ip, user: req.userData.userId }
-        );
+        Logger.info(rateLimiterRes, "addTextMessageToQueue", {
+          ip: ip,
+          user: req.userData.userId,
+        });
         // Not enough points to consume
         return res.status(204).json({
           success: false,

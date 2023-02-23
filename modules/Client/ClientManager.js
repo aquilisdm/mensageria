@@ -13,6 +13,19 @@ const client = new MongoClient(url);
 const dbName = "wpmessager";
 
 const ClientManager = {
+  destroyAllClientSessions: function () {
+    if (
+      typeof global.clientMap === "object" &&
+      Object.keys(global.clientMap).length > 0
+    ) {
+      Object.keys(global.clientMap).forEach(async (client) => {
+        if (client !== undefined && global.clientMap[client] !== undefined) {
+          await global.clientMap[client].destroy();
+          delete global.clientMap[client];
+        }
+      });
+    }
+  },
   getClientsByCompanyId: function (id) {
     return new Promise((resolve, reject) => {
       const connection = SQLServer.getConnection();
@@ -23,7 +36,7 @@ const ClientManager = {
         }
         // If no error, then good to proceed.
         let request = new Request(
-          `select top 200 Mensageria.DISPOSITIVOS.CHAVE as clientId,Mensageria.DISPOSITIVOS.DEVICE_INFO as deviceInfo,Mensageria.DISPOSITIVOS.CODIGO_CADASTRADOR as userId from Mensageria.DISPOSITIVOS where CODIGO_EMPRESA = @id and ATIVO = 'SIM';`,
+          `select top 200 Mensageria.DISPOSITIVOS.CHAVE as clientId,Mensageria.DISPOSITIVOS.DEVICE_INFO as deviceInfo,Mensageria.DISPOSITIVOS.CODIGO_CADASTRADOR as userId,Mensageria.DISPOSITIVOS.CELULAR as number from Mensageria.DISPOSITIVOS where CODIGO_EMPRESA = @id and ATIVO = 'SIM';`,
           function (err) {
             if (err) {
               console.log(err);
@@ -188,7 +201,7 @@ const ClientManager = {
         }
         // If no error, then good to proceed.
         let request = new Request(
-          `select top 200 Mensageria.DISPOSITIVOS.CHAVE as clientId,Mensageria.DISPOSITIVOS.DEVICE_INFO as deviceInfo,Mensageria.DISPOSITIVOS.CODIGO_CADASTRADOR as userId from Mensageria.DISPOSITIVOS where CODIGO_CADASTRADOR = @id and ATIVO = 1;`,
+          `select top 200 Mensageria.DISPOSITIVOS.CHAVE as clientId,Mensageria.DISPOSITIVOS.DEVICE_INFO as deviceInfo,Mensageria.DISPOSITIVOS.CODIGO_CADASTRADOR as userId from Mensageria.DISPOSITIVOS where CODIGO_CADASTRADOR = @id and ATIVO = 'SIM';`,
           function (err) {
             if (err) {
               console.log(err);

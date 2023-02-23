@@ -9,12 +9,12 @@ const eventEmitter = new EventEmitter();
 const Utils = require("../../logic/Utils");
 eventEmitter.setMaxListeners(120);
 
-eventEmitter.on("newClient", function (clientId, userId) {
+eventEmitter.on("newClient", async function (clientId, userId) {
   if (
     global.clientMap[clientId] !== null &&
     global.clientMap[clientId] !== undefined
   ) {
-    global.clientMap[clientId].on("disconnected", () => {
+    global.clientMap[clientId].on("disconnected", async () => {
       console.log(
         "Device has been disconnected " +
           clientId +
@@ -29,8 +29,8 @@ eventEmitter.on("newClient", function (clientId, userId) {
 
       ClientManager.deleteClient(clientId);
       global.clientMap[clientId].removeAllListeners("disconnected");
-      global.clientMap[clientId].destroy();
-      global.clientMap[clientId] = undefined;
+      await global.clientMap[clientId].destroy();
+      delete global.clientMap[clientId];
     });
   }
 });
@@ -55,8 +55,52 @@ function establishOrCreateConnection(clientId) {
 }
 
 const MessageService = {
-  fetchMessagesByNumber: function (params) {
-    if (params.number !== undefined && params.length <= 14) {
+  sendWhatsAppMessage: function (clientId, number, message) {
+    return new Promise(async (resolve, reject) => {
+      try {
+        if (await establishOrCreateConnection(clientId)) {
+          let wpClientId = await global.clientMap[clientId].getNumberId(number);
+
+          if (wpClientId !== null) {
+            //Send message
+            await global.clientMap[clientId].sendMessage(
+              wpClientId._serialized,
+              message
+            );
+            resolve({
+              success: true,
+              message: "Message was sent successfully!",
+              code: 1,
+            });
+          } else {
+            resolve({
+              success: false,
+              message: "This number is not registered in WhatsApp",
+              code: 0,
+            });
+          }
+        } else {
+          resolve({
+            success: false,
+            message:
+              "Message could not be sent due to an internal connection error",
+            code: 1,
+          });
+        }
+      } catch (err) {
+        console.log(err);
+        resolve({ success: false, message: err });
+      }
+    });
+  },
+  fetchMessageByNumber: function (params) {
+    if (
+      params.number !== undefined &&
+      params.number.length <= 14 &&
+      ((!Utils.isEmpty(params.channel) && params.channel.length <= 60) ||
+        (!Utils.isEmpty(params.channel2) && params.channel2.length <= 60) ||
+        (!Utils.isEmpty(params.channel3) && params.channel3.length <= 60))
+    ) {
       if (
         Utils.isDate(new Date(params.startDate)) &&
         Utils.isDate(new Date(params.endDate))
@@ -73,7 +117,11 @@ const MessageService = {
           "-" +
           startDateArray[0] +
           " " +
-          startDate.toLocaleTimeString().replace("PM", "").replace("AM", "").trim();
+          startDate
+            .toLocaleTimeString()
+            .replace("PM", "")
+            .replace("AM", "")
+            .trim();
 
         params.endDate =
           endDateArray[2] +
@@ -82,10 +130,14 @@ const MessageService = {
           "-" +
           endDateArray[0] +
           " " +
-          endDate.toLocaleTimeString().replace("PM", "").replace("AM", "").trim();
+          endDate
+            .toLocaleTimeString()
+            .replace("PM", "")
+            .replace("AM", "")
+            .trim();
       }
 
-      return MessageRepository.fetchMessagesByNumber(params);
+      return MessageRepository.fetchMessageByNumber(params);
     } else
       return new Promise((resolve, reject) => {
         resolve([]);

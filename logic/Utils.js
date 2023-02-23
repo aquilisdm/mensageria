@@ -1,8 +1,11 @@
 const Utils = {
-  isDate: function(date) {
+  isEmpty: function (string) {
+    return string === undefined || string === null || string === "";
+  },
+  isDate: function (date) {
     try {
-    return date.toString() !== "Invalid Date"
-    } catch(err) {
+      return date.toString() !== "Invalid Date";
+    } catch (err) {
       console.log(err);
       return false;
     }
