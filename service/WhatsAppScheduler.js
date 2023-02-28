@@ -198,6 +198,8 @@ async function processQueueOne() {
                   status: "failed",
                 }
               );
+              pendingMessage.CANAL = Constants.CHANNEL.failed;
+              global.eventEmitter.emit("queueMove", [pendingMessage]);
             } else if (response.success === true) {
               console.log(
                 "Message with code " +
@@ -209,6 +211,9 @@ async function processQueueOne() {
                 Constants.CHANNEL.sentViaWhatsApp,
                 device !== undefined && device !== null ? device.number : ""
               );
+
+              pendingMessage.CANAL = Constants.CHANNEL.sentViaWhatsApp;
+              global.eventEmitter.emit("queueMove", [pendingMessage]);
             }
           }
         }

@@ -18,7 +18,7 @@ global.eventSessionInfo = {
   queryEventTime: undefined,
 };
 global.eventEmitter = new EventEmitter();
-global.eventEmitter.setMaxListeners(80);
+global.eventEmitter.setMaxListeners(500);
 global.lastDeviceIndex = 0;
 
 const MessagesController = require("./modules/Messages/MessagesController");

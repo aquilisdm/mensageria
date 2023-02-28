@@ -147,26 +147,6 @@ async function checkEventInterval() {
   let currentSendingInterval = await MessageRepository.fetchInterval();
 
   if (
-    currentQueryInterval !== null &&
-    currentQueryInterval !== undefined &&
-    currentQueryInterval.length > 0 &&
-    (typeof currentQueryInterval[0] == "string" ||
-      typeof currentQueryInterval[0] == "number") &&
-    isNaN(parseFloat(currentQueryInterval[0])) == false
-  ) {
-    currentQueryInterval = parseFloat(currentQueryInterval[0]) * 1000.0; //convert to milliseconds
-
-    if (currentQueryInterval !== queryInterval) {
-      //restart the interval
-      queryInterval = currentQueryInterval;
-      clearInterval(global.queryIntervalEvent);
-      console.clear();
-      console.log("Query interval has changed, restarting service...");
-      initServiceCore();
-    }
-  }
-
-  if (
     currentSendingInterval !== null &&
     currentSendingInterval !== undefined &&
     currentSendingInterval.length > 0 &&
@@ -182,6 +162,30 @@ async function checkEventInterval() {
       console.clear();
       console.log("Sending interval has changed, restarting service...");
       WhatsAppScheduler.start();
+    }
+  }
+
+  if (
+    currentQueryInterval !== null &&
+    currentQueryInterval !== undefined &&
+    currentQueryInterval.length > 0 &&
+    (typeof currentQueryInterval[0] == "string" ||
+      typeof currentQueryInterval[0] == "number") &&
+    isNaN(parseFloat(currentQueryInterval[0])) == false
+  ) {
+    currentQueryInterval = parseFloat(currentQueryInterval[0]) * 1000.0; //convert to milliseconds
+
+    if (currentQueryInterval !== queryInterval) {
+      //restart the interval
+      queryInterval = currentQueryInterval;
+      clearInterval(global.queryIntervalEvent);
+      console.clear();
+      console.log("Query interval has changed, restarting service...");
+      global.queryIntervalEvent = setInterval(
+        fetchPendingMessages,
+        queryInterval
+      );
+      console.log("Done");
     }
   }
 }
@@ -249,7 +253,7 @@ async function fetchPendingMessages() {
         await MessageRepository.fetchPendingWhatsAppMessages();
       processWhatsAppMessages(pendingWhatsAppMessages);
       shouldProcessBlockedMessages = true;
-      global.eventEmitter.emit("queueMove",pendingWhatsAppMessages);
+      global.eventEmitter.emit("queueMove", pendingWhatsAppMessages);
     }
 
     /*
@@ -264,7 +268,7 @@ async function fetchPendingMessages() {
       pendingBlockedMessages =
         await MessageRepository.fetchClientBlockedMessages();
       processBlockedMessages(pendingBlockedMessages);
-      global.eventEmitter.emit("queueMove",pendingBlockedMessages);
+      global.eventEmitter.emit("queueMove", pendingBlockedMessages);
     }
   } catch (err) {
     console.log(err);
@@ -293,7 +297,7 @@ const MessageCore = {
 
     WhatsAppScheduler.stop();
     SmsScheduler.stop();
-  }
+  },
 };
 
 module.exports = MessageCore;

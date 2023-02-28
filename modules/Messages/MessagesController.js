@@ -121,6 +121,10 @@ router.get("/listenToMessageQueue/:token", function (req, res, next) {
   if (decoded !== null) {
     var sseId = new Date().toLocaleTimeString();
     global.eventEmitter.on("queueMove", function (msgs) {
+      msgs = msgs.filter((value) => {
+        return value.CODIGO_EMPRESA === decoded.company;
+      });
+
       writeServerSendEvent(res, sseId, JSON.stringify(msgs));
     });
   } else res.status(401).json({ success: false, message: "Token is invalid" });
