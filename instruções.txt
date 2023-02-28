@@ -6,7 +6,7 @@ https://drive.google.com/drive/folders/1iu3KCWMwuOSmrohJN4uE62CaJwCihSmF?usp=sha
 
 
 # Iniciar Servidor 
-pm2 start index.js
+pm2 start ecosystem.config.js
 
 # Configurar cronjob para verificar o servidor periodicamente
 sudo crontab -e

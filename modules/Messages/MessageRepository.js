@@ -5,6 +5,81 @@ var TYPES = require("tedious").TYPES;
 var Request = require("tedious").Request;
 
 const MessageRepository = {
+  fetchFilteredMessageQueue: function () {
+    return new Promise((resolve, reject) => {
+      const connection = SQLServer.getConnection();
+      var result = [];
+
+      connection.on("connect", function (err) {
+        if (err) {
+          Logger.error(err, "MessageRepository.fetchPendingSmsMessages()", {});
+          reject(err);
+        }
+        // If no error, then good to proceed.
+        let request = new Request(
+          `SELECT TOP 100
+          M.CODIGO_MENSAGEM,
+          M.CODIGO_PARCEIRO,
+          M.WHATSAPP,
+          M.SMS,
+          M.CANAL,
+          M.CELULAR,
+          M.DATA_CADASTRO,
+          M.NOME_CAMPANHA,
+          1 AS CODIGO_EMPRESA,
+          M.DATA_ENVIO,
+          M.CODIGO_TIPO_MENSAGEM,
+          M.DATA_VALIDADE,
+          M.DATA_AGENDADA,
+          TM.PRIORIDADE_ENVIO,
+          PM.PERMITE,
+          CP.WHATSAPP as ACEITA_WHATSAPP,
+          CP.PROMOCOES as ACEITA_PROMOCOES, 
+          CP.SMS AS ACEITA_SMS
+        FROM Mensageria.MENSAGENS_AGENDADAS M
+        JOIN Mensageria.TIPO_MENSAGENS TM ON TM.CODIGO_TIPO_MENSAGEM = M.CODIGO_TIPO_MENSAGEM
+        LEFT JOIN Mensageria.PERMITE_MARKETING PM ON PM.CODIGO_PARCEIRO = M.CODIGO_PARCEIRO
+        JOIN Mensageria.CONTATOS_PERMISSOES CP ON CP.CODIGO_CONTATO = M.CODIGO_CONTATO
+        WHERE CANAL = 'AGUARDANDO ENVIO'
+        AND M.DATA_VALIDADE >= CAST(GETDATE() AS DATE)
+        AND M.DATA_AGENDADA <= GETDATE()
+        AND (M.CODIGO_TIPO_MENSAGEM <> 1 OR PM.PERMITE = 'SIM')
+        AND CAST(GETDATE() AS TIME) > TM.HORA_INICIO
+        AND CAST(GETDATE() AS TIME) < TM.HORA_FINAL
+        AND TM.COMERCIAL <> (IIF (DATEPART(weekday, GETDATE()) = 7 OR DATEPART(weekday, GETDATE()) = 1, 'SIM','XXX')) 
+        ORDER BY TM.PRIORIDADE_ENVIO, M.DATA_AGENDADA;`,
+          function (err) {
+            if (err) {
+              Logger.error(err, "MessageRepository.fetchPendingMessages()", {});
+              console.log(err);
+              connection.close();
+              reject(err);
+            }
+          }
+        );
+
+        request.on("row", function (columns) {
+          columns = SQLServer.formatResponse(columns);
+          if (Array.isArray(columns)) {
+            columns.forEach(function (column) {
+              if (column.CODIGO_MENSAGEM !== null) {
+                result.push(column);
+              }
+            });
+          }
+        });
+
+        request.on("requestCompleted", function (rowCount, more) {
+          connection.close();
+          resolve(result);
+        });
+
+        connection.execSql(request);
+      });
+
+      connection.connect();
+    });
+  },
   fetchShouldSendSMS: function () {
     return new Promise((resolve, reject) => {
       const connection = SQLServer.getConnection();
@@ -19,11 +94,7 @@ const MessageRepository = {
           `select top 1 Mensageria.PARAMETROS.VALOR_PARAMETRO from Mensageria.PARAMETROS where Mensageria.PARAMETROS.NOME_PARAMETRO = 'ENVIO SMS';`,
           function (err) {
             if (err) {
-              Logger.error(
-                err,
-                "MessageRepository.fetchShouldSendSMS()",
-                {}
-              );
+              Logger.error(err, "MessageRepository.fetchShouldSendSMS()", {});
               console.log(err);
               connection.close();
               reject(err);
@@ -65,39 +136,38 @@ const MessageRepository = {
         }
         // If no error, then good to proceed.
         let request = new Request(
-          `DECLARE @intervalo_envios int = (select TOP 1 Mensageria.PARAMETROS.VALOR_PARAMETRO
-            from Mensageria.PARAMETROS where Mensageria.PARAMETROS.NOME_PARAMETRO = 'INTERVALO ENVIOS')
-            DECLARE @intervalo_consulta int = (select TOP 1 Mensageria.PARAMETROS.VALOR_PARAMETRO
-            from Mensageria.PARAMETROS where Mensageria.PARAMETROS.NOME_PARAMETRO = 'INTERVALO CONSULTAS')
-            DECLARE @numero_dispositivos int = (select COUNT(Mensageria.DISPOSITIVOS.CHAVE) from Mensageria.DISPOSITIVOS where Mensageria.DISPOSITIVOS.ATIVO = 'SIM')
-SELECT TOP ((@intervalo_consulta / @intervalo_envios) * @numero_dispositivos) 
-  M.CODIGO_MENSAGEM,
-  M.CODIGO_PARCEIRO,
-  M.WHATSAPP,
-  M.SMS,
-  M.CANAL,
-  M.CELULAR,
-  M.DATA_CADASTRO,
-  M.NOME_CAMPANHA,
-  1 AS CODIGO_EMPRESA,
-  M.DATA_ENVIO,
-  M.CODIGO_TIPO_MENSAGEM,
-  M.DATA_VALIDADE,
-  TM.PRIORIDADE_ENVIO,
-  PM.PERMITE,
-  CP.WHATSAPP as ACEITA_WHATSAPP,
-  CP.SMS AS ACEITA_SMS
-FROM Mensageria.MENSAGENS_AGENDADAS M
-JOIN Mensageria.TIPO_MENSAGENS TM ON TM.CODIGO_TIPO_MENSAGEM = M.CODIGO_TIPO_MENSAGEM
-LEFT JOIN Mensageria.PERMITE_MARKETING PM ON PM.CODIGO_PARCEIRO = M.CODIGO_PARCEIRO
-JOIN Mensageria.CONTATOS_PERMISSOES CP ON CP.CODIGO_CONTATO = M.CODIGO_CONTATO
-WHERE CANAL = 'AGUARDANDO ENVIO'
-AND M.DATA_VALIDADE >= CAST(GETDATE() AS DATE)
-AND M.DATA_AGENDADA <= GETDATE()
-AND (M.CODIGO_TIPO_MENSAGEM <> 1 OR PM.PERMITE = 'SIM')
-AND CP.SMS <> 'SIM'
-AND CP.WHATSAPP <> 'SIM'
-ORDER BY TM.PRIORIDADE_ENVIO, M.DATA_CADASTRO;`,
+          `SELECT TOP 100
+          M.CODIGO_MENSAGEM,
+          M.CODIGO_PARCEIRO,
+          M.WHATSAPP,
+          M.SMS,
+          M.CANAL,
+          M.CELULAR,
+          M.DATA_CADASTRO,
+          M.NOME_CAMPANHA,
+          1 AS CODIGO_EMPRESA,
+          M.DATA_ENVIO,
+          M.CODIGO_TIPO_MENSAGEM,
+          M.DATA_VALIDADE,
+          TM.PRIORIDADE_ENVIO,
+          PM.PERMITE,
+          CP.WHATSAPP as ACEITA_WHATSAPP,
+          CP.PROMOCOES as ACEITA_PROMOCOES, 
+          CP.SMS AS ACEITA_SMS
+        FROM Mensageria.MENSAGENS_AGENDADAS M
+        JOIN Mensageria.TIPO_MENSAGENS TM ON TM.CODIGO_TIPO_MENSAGEM = M.CODIGO_TIPO_MENSAGEM
+        LEFT JOIN Mensageria.PERMITE_MARKETING PM ON PM.CODIGO_PARCEIRO = M.CODIGO_PARCEIRO
+        JOIN Mensageria.CONTATOS_PERMISSOES CP ON CP.CODIGO_CONTATO = M.CODIGO_CONTATO
+        WHERE CANAL = 'AGUARDANDO ENVIO'
+        AND M.DATA_VALIDADE >= CAST(GETDATE() AS DATE)
+        AND CP.WHATSAPP = 'NÃO'
+        AND CP.SMS = 'NÃO'
+        AND M.DATA_AGENDADA <= GETDATE()
+        AND (M.CODIGO_TIPO_MENSAGEM <> 1 OR PM.PERMITE = 'SIM')
+        AND CAST(GETDATE() AS TIME) > TM.HORA_INICIO
+        AND CAST(GETDATE() AS TIME) < TM.HORA_FINAL
+        AND TM.COMERCIAL <> (IIF (DATEPART(weekday, GETDATE()) = 7 OR DATEPART(weekday, GETDATE()) = 1, 'SIM','XXX')) 
+        ORDER BY TM.PRIORIDADE_ENVIO, M.DATA_AGENDADA;`,
           function (err) {
             if (err) {
               Logger.error(err, "MessageRepository.fetchPendingMessages()", {});
@@ -137,43 +207,42 @@ ORDER BY TM.PRIORIDADE_ENVIO, M.DATA_CADASTRO;`,
 
       connection.on("connect", function (err) {
         if (err) {
-          Logger.error(err, "MessageRepository.fetchPendingMessages()", {});
+          Logger.error(err, "MessageRepository.fetchPendingSmsMessages()", {});
           reject(err);
         }
         // If no error, then good to proceed.
         let request = new Request(
-          `DECLARE @intervalo_envios int = (select TOP 1 Mensageria.PARAMETROS.VALOR_PARAMETRO
-            from Mensageria.PARAMETROS where Mensageria.PARAMETROS.NOME_PARAMETRO = 'INTERVALO ENVIOS')
-            DECLARE @intervalo_consulta int = (select TOP 1 Mensageria.PARAMETROS.VALOR_PARAMETRO
-            from Mensageria.PARAMETROS where Mensageria.PARAMETROS.NOME_PARAMETRO = 'INTERVALO CONSULTAS')
-            DECLARE @numero_dispositivos int = (select COUNT(Mensageria.DISPOSITIVOS.CHAVE) from Mensageria.DISPOSITIVOS where Mensageria.DISPOSITIVOS.ATIVO = 'SIM')
-SELECT TOP ((@intervalo_consulta / @intervalo_envios) * @numero_dispositivos) 
-  M.CODIGO_MENSAGEM,
-  M.CODIGO_PARCEIRO,
-  M.WHATSAPP,
-  M.SMS,
-  M.CANAL,
-  M.CELULAR,
-  M.DATA_CADASTRO,
-  M.NOME_CAMPANHA,
-  1 AS CODIGO_EMPRESA,
-  M.DATA_ENVIO,
-  M.CODIGO_TIPO_MENSAGEM,
-  M.DATA_VALIDADE,
-  TM.PRIORIDADE_ENVIO,
-  PM.PERMITE,
-  CP.WHATSAPP as ACEITA_WHATSAPP,
-  CP.SMS AS ACEITA_SMS
-FROM Mensageria.MENSAGENS_AGENDADAS M
-JOIN Mensageria.TIPO_MENSAGENS TM ON TM.CODIGO_TIPO_MENSAGEM = M.CODIGO_TIPO_MENSAGEM
-LEFT JOIN Mensageria.PERMITE_MARKETING PM ON PM.CODIGO_PARCEIRO = M.CODIGO_PARCEIRO
-JOIN Mensageria.CONTATOS_PERMISSOES CP ON CP.CODIGO_CONTATO = M.CODIGO_CONTATO
-WHERE CANAL = 'AGUARDANDO ENVIO'
-AND M.DATA_VALIDADE >= CAST(GETDATE() AS DATE)
-AND M.DATA_AGENDADA <= GETDATE()
-AND (M.CODIGO_TIPO_MENSAGEM <> 1 OR PM.PERMITE = 'SIM')
-AND CP.SMS = 'SIM'
-ORDER BY TM.PRIORIDADE_ENVIO, M.DATA_CADASTRO;`,
+          `SELECT TOP 100
+          M.CODIGO_MENSAGEM,
+          M.CODIGO_PARCEIRO,
+          M.WHATSAPP,
+          M.SMS,
+          M.CANAL,
+          M.CELULAR,
+          M.DATA_CADASTRO,
+          M.NOME_CAMPANHA,
+          1 AS CODIGO_EMPRESA,
+          M.DATA_ENVIO,
+          M.CODIGO_TIPO_MENSAGEM,
+          M.DATA_VALIDADE,
+          TM.PRIORIDADE_ENVIO,
+          PM.PERMITE,
+          CP.WHATSAPP as ACEITA_WHATSAPP,
+          CP.PROMOCOES as ACEITA_PROMOCOES, 
+          CP.SMS AS ACEITA_SMS
+        FROM Mensageria.MENSAGENS_AGENDADAS M
+        JOIN Mensageria.TIPO_MENSAGENS TM ON TM.CODIGO_TIPO_MENSAGEM = M.CODIGO_TIPO_MENSAGEM
+        LEFT JOIN Mensageria.PERMITE_MARKETING PM ON PM.CODIGO_PARCEIRO = M.CODIGO_PARCEIRO
+        JOIN Mensageria.CONTATOS_PERMISSOES CP ON CP.CODIGO_CONTATO = M.CODIGO_CONTATO
+        WHERE CANAL = 'AGUARDANDO ENVIO'
+        AND M.DATA_VALIDADE >= CAST(GETDATE() AS DATE)
+        AND CP.SMS = 'SIM'
+        AND M.DATA_AGENDADA <= GETDATE()
+        AND (M.CODIGO_TIPO_MENSAGEM <> 1 OR PM.PERMITE = 'SIM')
+        AND CAST(GETDATE() AS TIME) > TM.HORA_INICIO
+        AND CAST(GETDATE() AS TIME) < TM.HORA_FINAL
+        AND TM.COMERCIAL <> (IIF (DATEPART(weekday, GETDATE()) = 7 OR DATEPART(weekday, GETDATE()) = 1, 'SIM','XXX')) 
+        ORDER BY TM.PRIORIDADE_ENVIO, M.DATA_AGENDADA;`,
           function (err) {
             if (err) {
               Logger.error(err, "MessageRepository.fetchPendingMessages()", {});
@@ -218,41 +287,44 @@ ORDER BY TM.PRIORIDADE_ENVIO, M.DATA_CADASTRO;`,
         }
         // If no error, then good to proceed.
         let request = new Request(
-          `DECLARE @intervalo_envios int = (select TOP 1 Mensageria.PARAMETROS.VALOR_PARAMETRO
-            from Mensageria.PARAMETROS where Mensageria.PARAMETROS.NOME_PARAMETRO = 'INTERVALO ENVIOS')
-            DECLARE @intervalo_consulta int = (select TOP 1 Mensageria.PARAMETROS.VALOR_PARAMETRO
-            from Mensageria.PARAMETROS where Mensageria.PARAMETROS.NOME_PARAMETRO = 'INTERVALO CONSULTAS')
-            DECLARE @numero_dispositivos int = (select COUNT(Mensageria.DISPOSITIVOS.CHAVE) from Mensageria.DISPOSITIVOS where Mensageria.DISPOSITIVOS.ATIVO = 'SIM')
-SELECT TOP ((@intervalo_consulta / @intervalo_envios) * @numero_dispositivos) 
-  M.CODIGO_MENSAGEM,
-  M.CODIGO_PARCEIRO,
-  M.WHATSAPP,
-  M.SMS,
-  M.CANAL,
-  M.CELULAR,
-  M.DATA_CADASTRO,
-  M.NOME_CAMPANHA,
-  1 AS CODIGO_EMPRESA,
-  M.DATA_ENVIO,
-  M.CODIGO_TIPO_MENSAGEM,
-  M.DATA_VALIDADE,
-  TM.PRIORIDADE_ENVIO,
-  PM.PERMITE,
-  CP.WHATSAPP as ACEITA_WHATSAPP,
-  CP.SMS AS ACEITA_SMS
-FROM Mensageria.MENSAGENS_AGENDADAS M
-JOIN Mensageria.TIPO_MENSAGENS TM ON TM.CODIGO_TIPO_MENSAGEM = M.CODIGO_TIPO_MENSAGEM
-LEFT JOIN Mensageria.PERMITE_MARKETING PM ON PM.CODIGO_PARCEIRO = M.CODIGO_PARCEIRO
-JOIN Mensageria.CONTATOS_PERMISSOES CP ON CP.CODIGO_CONTATO = M.CODIGO_CONTATO
-WHERE CANAL = 'AGUARDANDO ENVIO'
-AND M.DATA_VALIDADE >= CAST(GETDATE() AS DATE)
-AND M.DATA_AGENDADA <= GETDATE()
-AND (M.CODIGO_TIPO_MENSAGEM <> 1 OR PM.PERMITE = 'SIM')
-AND CP.WHATSAPP = 'SIM'
-ORDER BY TM.PRIORIDADE_ENVIO, M.DATA_CADASTRO;`,
+          `SELECT TOP 100
+          M.CODIGO_MENSAGEM,
+          M.CODIGO_PARCEIRO,
+          M.WHATSAPP,
+          M.SMS,
+          M.CANAL,
+          M.CELULAR,
+          M.DATA_CADASTRO,
+          M.NOME_CAMPANHA,
+          1 AS CODIGO_EMPRESA,
+          M.DATA_ENVIO,
+          M.CODIGO_TIPO_MENSAGEM,
+          M.DATA_VALIDADE,
+          TM.PRIORIDADE_ENVIO,
+          PM.PERMITE,
+          CP.WHATSAPP as ACEITA_WHATSAPP,
+          CP.PROMOCOES as ACEITA_PROMOCOES, 
+          CP.SMS AS ACEITA_SMS
+        FROM Mensageria.MENSAGENS_AGENDADAS M
+        JOIN Mensageria.TIPO_MENSAGENS TM ON TM.CODIGO_TIPO_MENSAGEM = M.CODIGO_TIPO_MENSAGEM
+        LEFT JOIN Mensageria.PERMITE_MARKETING PM ON PM.CODIGO_PARCEIRO = M.CODIGO_PARCEIRO
+        JOIN Mensageria.CONTATOS_PERMISSOES CP ON CP.CODIGO_CONTATO = M.CODIGO_CONTATO
+        WHERE CANAL = 'AGUARDANDO ENVIO'
+        AND M.DATA_VALIDADE >= CAST(GETDATE() AS DATE)
+        AND CP.WHATSAPP = 'SIM'
+        AND M.DATA_AGENDADA <= GETDATE()
+        AND (M.CODIGO_TIPO_MENSAGEM <> 1 OR PM.PERMITE = 'SIM')
+        AND CAST(GETDATE() AS TIME) > TM.HORA_INICIO
+        AND CAST(GETDATE() AS TIME) < TM.HORA_FINAL
+        AND TM.COMERCIAL <> (IIF (DATEPART(weekday, GETDATE()) = 7 OR DATEPART(weekday, GETDATE()) = 1, 'SIM','XXX')) 
+        ORDER BY TM.PRIORIDADE_ENVIO, M.DATA_AGENDADA;`,
           function (err) {
             if (err) {
-              Logger.error(err, "MessageRepository.fetchPendingMessages()", {});
+              Logger.error(
+                err,
+                "MessageRepository.fetchPendingWhatsAppMessages()",
+                {}
+              );
               console.log(err);
               connection.close();
               reject(err);
@@ -282,7 +354,7 @@ ORDER BY TM.PRIORIDADE_ENVIO, M.DATA_CADASTRO;`,
       connection.connect();
     });
   },
-  insertMessage: function(msg) {
+  insertMessage: function (msg) {
     return new Promise((resolve, reject) => {
       const connection = SQLServer.getConnection();
       var result = [];
@@ -341,12 +413,28 @@ ORDER BY TM.PRIORIDADE_ENVIO, M.DATA_CADASTRO;`,
         request.addParameter("WHATSAPP", TYPES.NVarChar, msg.WHATSAPP);
         request.addParameter("SMS", TYPES.NVarChar, msg.SMS);
         request.addParameter("CANAL", TYPES.NVarChar, "AGUARDANDO ENVIO");
-        request.addParameter("CELULAR", TYPES.NVarChar,msg.CELULAR);
-        request.addParameter("CODIGO_CADASTRADOR", TYPES.Int, msg.CODIGO_CADASTRADOR);
-        request.addParameter("CODIGO_ALTERADOR", TYPES.Int, msg.CODIGO_ALTERADOR);
-        request.addParameter("NOME_USUARIO_COMPUTADOR", TYPES.NVarChar, msg.NOME_USUARIO_COMPUTADOR);
+        request.addParameter("CELULAR", TYPES.NVarChar, msg.CELULAR);
+        request.addParameter(
+          "CODIGO_CADASTRADOR",
+          TYPES.Int,
+          msg.CODIGO_CADASTRADOR
+        );
+        request.addParameter(
+          "CODIGO_ALTERADOR",
+          TYPES.Int,
+          msg.CODIGO_ALTERADOR
+        );
+        request.addParameter(
+          "NOME_USUARIO_COMPUTADOR",
+          TYPES.NVarChar,
+          msg.NOME_USUARIO_COMPUTADOR
+        );
         request.addParameter("IP", TYPES.NVarChar, msg.IP);
-        request.addParameter("CODIGO_TIPO_MENSAGEM", TYPES.Int, msg.CODIGO_TIPO_MENSAGEM);
+        request.addParameter(
+          "CODIGO_TIPO_MENSAGEM",
+          TYPES.Int,
+          msg.CODIGO_TIPO_MENSAGEM
+        );
         request.addParameter("CODIGO_CONTATO", TYPES.Int, msg.CODIGO_CONTATO);
 
         request.on("requestCompleted", function (rowCount, more) {
@@ -481,7 +569,7 @@ ORDER BY TM.PRIORIDADE_ENVIO, M.DATA_CADASTRO;`,
         let request = new Request(
           `select COUNT(Mensageria.MENSAGENS_AGENDADAS.CODIGO_MENSAGEM) as count from Mensageria.MENSAGENS_AGENDADAS
           where (Mensageria.MENSAGENS_AGENDADAS.CANAL='WHATSAPP') 
-          and Mensageria.MENSAGENS_AGENDADAS.DATA_ENVIO >= DATEADD(HH, -1, GETDATE());`,
+          and Mensageria.MENSAGENS_AGENDADAS.DATA_ENVIO >= DATEADD(HH, -1, GETDATE())`,
           function (err) {
             if (err) {
               Logger.error(

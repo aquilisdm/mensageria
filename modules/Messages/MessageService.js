@@ -1,4 +1,3 @@
-const { Client, LocalAuth } = require("whatsapp-web.js");
 const qrcode = require("qrcode-terminal");
 const Logger = require("../../logic/Logger");
 const MessageRepository = require("./MessageRepository");
@@ -40,11 +39,11 @@ function establishOrCreateConnection(clientId) {
   return new Promise(async (resolve, reject) => {
     if (global.clientMap[clientId] === undefined) {
       global.clientMap[clientId] = ClientManager.createClientSession(clientId);
-      
+
       try {
         //Initialize the client
         await global.clientMap[clientId].initialize();
-       
+
         resolve(true);
       } catch (err) {
         console.log(err);
@@ -56,6 +55,22 @@ function establishOrCreateConnection(clientId) {
 }
 
 const MessageService = {
+  getNumberId: async function (number, clientId) {
+    if (await establishOrCreateConnection(clientId)) {
+      let wpClientId = await global.clientMap[clientId].getNumberId(number);
+      if (wpClientId !== null) {
+        return { success: true, message: "Number is registered in whatsapp" };
+      } else
+        return {
+          success: false,
+          message: "Number is not registered in whatsapp",
+        };
+    } else
+      return {
+        success: false,
+        message: "Failed to establish connection for the given client id",
+      };
+  },
   sendWhatsAppMessage: function (clientId, number, message) {
     return new Promise(async (resolve, reject) => {
       try {
@@ -90,9 +105,12 @@ const MessageService = {
         }
       } catch (err) {
         console.log(err);
-        resolve({ success: false, message: err });
+        resolve({ success: false, message: "Error at catch: " + err });
       }
     });
+  },
+  fetchFilteredMessageQueue: function () {
+    return MessageRepository.fetchFilteredMessageQueue();
   },
   fetchMessageByNumber: function (params) {
     if (
@@ -144,22 +162,6 @@ const MessageService = {
         resolve([]);
       });
   },
-  startConnection: function () {
-    return new Promise(async (resolve, reject) => {
-      resolve({ success: await establishOrCreateConnection() });
-    });
-  },
-  endConnection: function (clientId) {
-    return new Promise(async (resolve, reject) => {
-      if (await establishOrCreateConnection(clientId)) {
-        global.clientMap[clientId].destroy();
-        global.clientMap[clientId] = undefined;
-        resolve(true);
-      } else {
-        resolve(false);
-      }
-    });
-  },
   logout: function (clientId) {
     return new Promise(async (resolve, reject) => {
       ClientManager.deleteClient(clientId);
@@ -169,7 +171,7 @@ const MessageService = {
       if (await establishOrCreateConnection(clientId)) {
         clearTimeout(timeout);
         global.clientMap[clientId].logout();
-        global.clientMap[clientId] = undefined;
+        delete global.clientMap[clientId];
         resolve(true);
       } else {
         resolve(false);

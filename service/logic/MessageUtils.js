@@ -7,36 +7,15 @@ const MessageUtils = {
   shouldSendSMS: async function () {
     try {
       let shouldSendSMS = await MessageRepository.fetchShouldSendSMS();
-      let startTime = await MessageRepository.fetchStartTime();
-      let endTime = await MessageRepository.fetchEndTime();
-      let currentDate = Utils.convertTZ(new Date(), "America/Sao_Paulo");
 
-      if (
-        Array.isArray(startTime) &&
-        Array.isArray(endTime) &&
-        startTime.length > 0 &&
-        endTime.length > 0
-      ) {
-        startTime[0] =
-          typeof startTime[0] === "number" || typeof startTime[0] === "string"
-            ? parseInt(startTime[0])
-            : -1;
-        endTime[0] =
-          typeof endTime[0] === "number" || typeof endTime[0] === "string"
-            ? parseInt(endTime[0])
-            : -1;
-
+      if (startTime.length > 0 && endTime.length > 0) {
         return (
           Array.isArray(shouldSendSMS) &&
-          currentDate.getHours() >= startTime[0] &&
-          currentDate.getHours() < endTime[0] &&
           shouldSendSMS.length > 0 &&
           typeof shouldSendSMS[0] === "string" &&
           shouldSendSMS[0].trim().toLowerCase() == "sim"
         );
       }
-
-      return false;
     } catch (err) {
       console.log(err);
       return false;
@@ -46,36 +25,13 @@ const MessageUtils = {
     try {
       let shouldSendWhatsApp =
         await MessageRepository.fetchShouldSendWhatsApp();
-      let startTime = await MessageRepository.fetchStartTime();
-      let endTime = await MessageRepository.fetchEndTime();
-      let currentDate = Utils.convertTZ(new Date(), "America/Sao_Paulo");
 
-      if (
-        Array.isArray(startTime) &&
-        Array.isArray(endTime) &&
-        startTime.length > 0 &&
-        endTime.length > 0
-      ) {
-        startTime[0] =
-          typeof startTime[0] === "number" || typeof startTime[0] === "string"
-            ? parseInt(startTime[0])
-            : -1;
-        endTime[0] =
-          typeof endTime[0] === "number" || typeof endTime[0] === "string"
-            ? parseInt(endTime[0])
-            : -1;
-
-        return (
-          Array.isArray(shouldSendWhatsApp) &&
-          currentDate.getHours() >= startTime[0] &&
-          currentDate.getHours() < endTime[0] &&
-          shouldSendWhatsApp.length > 0 &&
-          typeof shouldSendWhatsApp[0] === "string" &&
-          shouldSendWhatsApp[0].trim().toLowerCase() == "sim"
-        );
-      }
-
-      return false;
+      return (
+        Array.isArray(shouldSendWhatsApp) &&
+        shouldSendWhatsApp.length > 0 &&
+        typeof shouldSendWhatsApp[0] === "string" &&
+        shouldSendWhatsApp[0].trim().toLowerCase() == "sim"
+      );
     } catch (err) {
       console.log(err);
       return false;

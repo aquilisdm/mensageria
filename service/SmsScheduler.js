@@ -1,11 +1,8 @@
 const MessageRepository = require("../modules/Messages/MessageRepository");
-const MessageService = require("../modules/Messages/MessageService");
 const MessageUtils = require("./logic/MessageUtils");
 const Logger = require("../logic/Logger");
 const Utils = require("../logic/Utils");
 const Constants = require("../logic/Constants");
-const ClientManager = require("../modules/Client/ClientManager");
-const CompanyService = require("../modules/Company/CompanyService");
 const https = require("https");
 const url = require("url");
 const crypto = require("crypto");
@@ -129,13 +126,6 @@ function buildRequestBody(
   });
 }
 
-async function next() {
-  //recursive async call
-  SmsScheduler.stopIntervalEvent();
-  await processQueue();
-  SmsScheduler.startIntervalEvent();
-}
-
 /*
  * Events
  */
@@ -149,6 +139,19 @@ async function processQueue() {
           pendingMessage.ACEITA_SMS !== undefined &&
           pendingMessage.ACEITA_SMS === "SIM"
         ) {
+          if (
+            pendingMessage.CODIGO_TIPO_MENSAGEM == 1 &&
+            pendingMessage.ACEITA_PROMOCOES === "NÃO"
+          ) {
+            MessageRepository.updateMessageStatus(
+              pendingMessage.CODIGO_MENSAGEM,
+              Constants.CHANNEL.noMarketing,
+              ""
+            );
+
+            return;
+          }
+
           //Send messages
           formattedNumber = Utils.formatNumber(pendingMessage.CELULAR);
 
@@ -189,7 +192,7 @@ async function processQueue() {
             MessageRepository.updateMessageStatus(
               pendingMessage.CODIGO_MENSAGEM,
               Constants.CHANNEL.sentViaSMS,
-              ""
+              "huawei"
             );
 
             Logger.info(pendingMessage.SMS, "SmsScheduler.processQueue()", {
@@ -241,7 +244,10 @@ const SmsScheduler = {
     }
 
     //Initialize message distribution event
-    if (intervalCount !== null) {
+    if (
+      process.env.NODE_ENV === Constants.PRODUCTION_ENV &&
+      intervalCount !== null
+    ) {
       if (global.smsIntervalEvent === null) {
         global.smsIntervalEvent = setInterval(processQueue, intervalCount);
         console.log(BASE + " Message interval event has been started");
@@ -252,27 +258,14 @@ const SmsScheduler = {
       }
 
       global.eventSessionInfo.smsIntervalEventTime = intervalCount;
+      console.log(BASE + "Scheduler is running..." + intervalCount + "]");
     }
-
-    console.log(BASE + "Scheduler is running..." + intervalCount + "]");
   },
   stop: function () {
     console.log(BASE + "Stopping message scheduler and emptying queue...");
     global.smsScheduledQueue = [];
     clearInterval(global.smsIntervalEvent);
 
-    global.smsIntervalEvent = null;
-  },
-  startIntervalEvent: function () {
-    //Initialize message distribution event
-    if (intervalCount !== null) {
-      if (global.smsIntervalEvent === null) {
-        global.smsIntervalEvent = setInterval(processQueue, intervalCount);
-      }
-    }
-  },
-  stopIntervalEvent: function () {
-    clearInterval(global.smsIntervalEvent);
     global.smsIntervalEvent = null;
   },
   sendSMS: sendSMS,

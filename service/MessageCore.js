@@ -14,6 +14,7 @@ const CompanyService = require("../modules/Company/CompanyService");
 const BASE = "MessageCore:";
 var monitorIntervalEvent = null;
 var queryInterval = null;
+var intervalEventChecker = null;
 
 /*
  * Functions
@@ -22,11 +23,21 @@ var queryInterval = null;
 async function processBlockedMessages(blockedMessages) {
   if (Array.isArray(blockedMessages) && blockedMessages.length > 0) {
     blockedMessages.forEach(async (message) => {
-      MessageRepository.updateMessageStatus(
-        message.CODIGO_MENSAGEM,
-        Constants.CHANNEL.notAllowed,
-        "0"
-      );
+      if (message.CODIGO_TIPO_MENSAGEM == 1) {
+        MessageRepository.updateMessageStatus(
+          message.CODIGO_MENSAGEM,
+          message.ACEITA_PROMOCOES === "SIM"
+            ? Constants.CHANNEL.notAllowed
+            : Constants.CHANNEL.noMarketing,
+          "0"
+        );
+      } else {
+        MessageRepository.updateMessageStatus(
+          message.CODIGO_MENSAGEM,
+          Constants.CHANNEL.notAllowed,
+          "0"
+        );
+      }
     });
   }
 }
@@ -104,11 +115,8 @@ async function initServiceCore() {
     isNaN(parseFloat(queryInt[0])) == false
   ) {
     queryInterval = parseFloat(queryInt[0]) * 1000.0; //convert to milliseconds
-  }
 
-  if (queryInterval !== null) {
     if (global.queryIntervalEvent === null) {
-      clearInterval(global.queryIntervalEvent);
       global.queryIntervalEvent = setInterval(
         fetchPendingMessages,
         queryInterval
@@ -119,8 +127,13 @@ async function initServiceCore() {
     global.eventSessionInfo.queryEventTime = queryInterval;
   }
 
-  if (monitorIntervalEvent !== null) clearInterval(monitorIntervalEvent);
-  monitorIntervalEvent = setInterval(sendLogsToMonitors, 3600000);
+  if (monitorIntervalEvent === null) {
+    monitorIntervalEvent = setInterval(sendLogsToMonitors, 3600000);
+  }
+
+  if (intervalEventChecker === null) {
+    intervalEventChecker = setInterval(checkEventInterval, 120000);
+  }
 
   console.log(BASE + " is running... [query:" + queryInterval + "]");
 }
@@ -128,10 +141,58 @@ async function initServiceCore() {
 /*
  * Events
  */
+
+async function checkEventInterval() {
+  let currentQueryInterval = await MessageRepository.fetchQueryInterval();
+  let currentSendingInterval = await MessageRepository.fetchInterval();
+
+  if (
+    currentQueryInterval !== null &&
+    currentQueryInterval !== undefined &&
+    currentQueryInterval.length > 0 &&
+    (typeof currentQueryInterval[0] == "string" ||
+      typeof currentQueryInterval[0] == "number") &&
+    isNaN(parseFloat(currentQueryInterval[0])) == false
+  ) {
+    currentQueryInterval = parseFloat(currentQueryInterval[0]) * 1000.0; //convert to milliseconds
+
+    if (currentQueryInterval !== queryInterval) {
+      //restart the interval
+      queryInterval = currentQueryInterval;
+      clearInterval(global.queryIntervalEvent);
+      console.clear();
+      console.log("Query interval has changed, restarting service...");
+      initServiceCore();
+    }
+  }
+
+  if (
+    currentSendingInterval !== null &&
+    currentSendingInterval !== undefined &&
+    currentSendingInterval.length > 0 &&
+    (typeof currentSendingInterval[0] == "string" ||
+      typeof currentSendingInterval[0] == "number") &&
+    isNaN(parseFloat(currentSendingInterval[0])) == false
+  ) {
+    currentSendingInterval = parseFloat(currentSendingInterval[0]) * 1000.0;
+
+    if (currentSendingInterval !== WhatsAppScheduler.getIntervalCount()) {
+      WhatsAppScheduler.setIntervalCount(currentSendingInterval);
+      WhatsAppScheduler.stop();
+      console.clear();
+      console.log("Sending interval has changed, restarting service...");
+      WhatsAppScheduler.start();
+    }
+  }
+}
+
 async function sendLogsToMonitors() {
   //WhatsApp version
+  console.clear();
   if (await MessageUtils.shouldSendWhatsApp()) {
+    console.log("Sending logs to the following people...");
     let monitors = await MessageRepository.fetchMonitors();
+    console.log(JSON.stringify(monitors));
 
     if (Array.isArray(monitors) && monitors.length > 0) {
       let allCompanyDevices = await MessageUtils.fetchAllCompanyDevices();
@@ -176,52 +237,6 @@ async function sendLogsToMonitors() {
   }
 }
 
-async function sendLogsToMonitorsSMS() {
-  if (await MessageUtils.shouldSendSMS()) {
-    let monitors = await MessageRepository.fetchMonitors();
-
-    if (Array.isArray(monitors) && monitors.length > 0) {
-      let allCompanyDevices = await MessageUtils.fetchAllCompanyDevices();
-      //Company id number 1 is always 'Zap Grafica'
-      let device = MessageUtils.selectSeqDevice(allCompanyDevices[1]);
-      let currentClientId =
-        device !== undefined && device !== null ? device.clientId : undefined;
-      let currentDate = Utils.convertTZ(new Date(), "America/Sao_Paulo")
-        .toLocaleDateString()
-        .split("/");
-      let date = Utils.convertTZ(new Date(), "America/Sao_Paulo");
-
-      currentDate =
-        currentDate[1] + "/" + currentDate[0] + "/" + currentDate[2];
-      currentDate += ` entre ${
-        date.getHours().toString().length == 1
-          ? "0" + date.getHours()
-          : date.getHours()
-      }:00 e ${date.getHours() + 1 > 23 ? "00" : date.getHours() + 1}:00`;
-
-      if (currentClientId !== undefined && currentClientId !== null) {
-        for (let i = 0; i < monitors.length; i++) {
-          let formattedNumber = Utils.formatNumber(monitors[i]);
-          if (formattedNumber !== null) {
-            let count = await MessageRepository.fetchSentMessagesCount();
-
-            await SmsScheduler.sendSMS(
-              formattedNumber,
-              `*${
-                Array.isArray(count) && count.length > 0
-                  ? count[0]
-                  : "UNAVAILABLE"
-              }* mensagens foram enviadas.\n*${currentDate}*`
-            );
-          }
-        }
-      }
-    }
-  } else {
-    ClientManager.destroyAllClientSessions();
-  }
-}
-
 async function fetchPendingMessages() {
   try {
     let pendingWhatsAppMessages = [];
@@ -234,6 +249,7 @@ async function fetchPendingMessages() {
         await MessageRepository.fetchPendingWhatsAppMessages();
       processWhatsAppMessages(pendingWhatsAppMessages);
       shouldProcessBlockedMessages = true;
+      global.eventEmitter.emit("queueMove",pendingWhatsAppMessages);
     }
 
     /*
@@ -242,14 +258,14 @@ async function fetchPendingMessages() {
       processSMSMessages(pendingSMSMessages);
       shouldProcessBlockedMessages = true;
     }
- 
+    */
 
     if (shouldProcessBlockedMessages) {
       pendingBlockedMessages =
         await MessageRepository.fetchClientBlockedMessages();
       processBlockedMessages(pendingBlockedMessages);
+      global.eventEmitter.emit("queueMove",pendingBlockedMessages);
     }
-    */ 
   } catch (err) {
     console.log(err);
   }
@@ -267,6 +283,7 @@ const MessageCore = {
     //SmsScheduler.start();
   },
   stop: function () {
+    console.clear();
     console.log("Trying to stop all message services...");
     //Stop all services
     clearInterval(global.queryIntervalEvent);
@@ -275,22 +292,8 @@ const MessageCore = {
     monitorIntervalEvent = null;
 
     WhatsAppScheduler.stop();
-    //SmsScheduler.stop();
-  },
-  stopSMS: function () {
     SmsScheduler.stop();
-  },
-  stopWhatsApp: function () {
-    WhatsAppScheduler.stop();
-  },
-  startWhatsApp: function () {
-    //Starts the individual service for the whatsapp message
-    WhatsAppScheduler.start();
-  },
-  startSMS: function () {
-    //Start the individual service for the sms message
-    SmsScheduler.start();
-  },
+  }
 };
 
 module.exports = MessageCore;

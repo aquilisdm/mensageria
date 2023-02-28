@@ -5,6 +5,7 @@ const dotEnv = require("dotenv");
 const process = require("node:process");
 const EventEmitter = require("events");
 const cors = require("cors");
+const Utils = require("./logic/Utils");
 global.clientMap = {};
 global.scheduledQueue = [];
 global.smsScheduledQueue = [];
@@ -21,13 +22,12 @@ global.eventEmitter.setMaxListeners(80);
 global.lastDeviceIndex = 0;
 
 const MessagesController = require("./modules/Messages/MessagesController");
-const MessageCore = require('./service/MessageCore');
+const MessageCore = require("./service/MessageCore");
 const ClientController = require("./modules/Client/ClientController");
 const UserController = require("./modules/User/UserController");
 const ConfigController = require("./modules/Config/ConfigController");
 const CompanyController = require("./modules/Company/CompanyController");
-const MessageDispatcher = require("./service/MessageDispatcher");
-const WhatsAppScheduler = require("./service/WhatsAppScheduler");
+const DataManager = require("./service/DataManager");
 
 //Hermod
 //https://support.huaweicloud.com/intl/en-us/devg-msgsms/sms_04_0008.html
@@ -38,7 +38,7 @@ const WhatsAppScheduler = require("./service/WhatsAppScheduler");
 //https://console-intl.huaweicloud.com/msgsms/?region=ap-southeast-1&locale=en-us#/msgsms/overview
 
 //Start server
-//pm2 start index.js --name wpmsg
+//pm2 start ecosystem.config.js
 
 //Restart server
 //pm2 restart [app id || app name]
@@ -52,7 +52,7 @@ const WhatsAppScheduler = require("./service/WhatsAppScheduler");
 //nvm use v14.10.0
 //https://docs.wwebjs.dev/Client.html#getChats
 //https://wwebjs.dev/guide/#first-steps
-
+//https://wpmessager-fec1d.firebaseapp.com/
 //Dominio
 //https://whatsapp.simw.com.br/
 
@@ -96,7 +96,7 @@ app.get("/", function (req, res, next) {
   //Main page
   return res.json({
     message:
-      "Welcome to WhatsApp Manager API. See the documentation for more details",
+      "Welcome to WhatsApp Manager API. Check the documentation for more details",
   });
 });
 
@@ -107,6 +107,7 @@ app.use("/wp-config", ConfigController);
 app.use("/wp-company", CompanyController);
 
 process.on("exit", (code) => {
+  console.clear();
   console.log(`About to exit with code: ${code}`);
   console.log(`Removing active listeners...`);
   console.log(`Emptying queue...`);
@@ -115,9 +116,11 @@ process.on("exit", (code) => {
   global.eventEmitter.removeAllListeners("queueMove");
   global.scheduledQueue = [];
   MessageCore.stop();
+  DataManager.stop();
 });
 
 app.listen(2000, function () {
   console.log("Starting server on", 2000);
   MessageCore.start();
+  DataManager.start();
 });

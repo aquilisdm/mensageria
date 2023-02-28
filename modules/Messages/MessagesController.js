@@ -87,14 +87,7 @@ router.post(
   "/searchMessageByNumber",
   Authentication.verifyTokenMiddleware,
   function (req, res, next) {
-    MessageService.fetchMessageByNumber({
-      number: req.body.number,
-      channel: req.body.channel,
-      channel2: req.body.channel2,
-      channel3: req.body.channel3,
-      startDate: req.body.startDate,
-      endDate: req.body.endDate,
-    })
+    MessageService.fetchFilteredMessageQueue()
       .then((result) => {
         if (Array.isArray(result)) return res.json(result);
         else return res.json([]);
@@ -285,11 +278,18 @@ router.post(
 
     rateLimiter
       .consume(ip, 1) // consume 1 point
-      .then((rateLimiterRes) => {
-        if (validator.isLength(req.body.number, { min: 1, max: 13 })) {
+      .then(async (rateLimiterRes) => {
+        if (validator.isLength(req.body.number, { min: 11, max: 13 })) {
+          let resp = await MessageService.getNumberId(req.body.number);
+
           return res.json({
-            success: true,
-            message: "Your message was added to the queue",
+            success: resp.success,
+            message: resp.message,
+          });
+        } else {
+          return res.json({
+            success: false,
+            message: "Number format is invalid",
           });
         }
       })
