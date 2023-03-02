@@ -6,17 +6,11 @@ const process = require("node:process");
 const EventEmitter = require("events");
 const cors = require("cors");
 const Utils = require("./logic/Utils");
+var cron = require('node-cron');
 global.clientMap = {};
-global.scheduledQueue = [];
-global.smsScheduledQueue = [];
 global.intervalEvent = null;
 global.queryIntervalEvent = null;
 global.smsIntervalEvent = null;
-global.smsQueryIntervalEvent = null;
-global.eventSessionInfo = {
-  intervalEventTime: undefined,
-  queryEventTime: undefined,
-};
 global.eventEmitter = new EventEmitter();
 global.eventEmitter.setMaxListeners(500);
 global.lastDeviceIndex = 0;
@@ -30,6 +24,12 @@ const CompanyController = require("./modules/Company/CompanyController");
 const DataManager = require("./service/DataManager");
 
 //Hermod
+
+//node version 16.x.x
+
+//SMS Console
+//https://www.huaweicloud.com/intl/en-us/product/msgsms.html
+
 //https://support.huaweicloud.com/intl/en-us/devg-msgsms/sms_04_0008.html
 //https://support.huaweicloud.com/intl/en-us/usermanual-msgsms/sms_03_0011.html
 //https://developer.huawei.com/consumer/en/service/josp/agc/index.html#/unrealName
@@ -106,6 +106,17 @@ app.use("/wp-users", UserController);
 app.use("/wp-config", ConfigController);
 app.use("/wp-company", CompanyController);
 
+
+var task = cron.schedule('0 23 * * *', () => {
+  console.log('Running a job at 11:00 PM at America/Sao_Paulo timezone');
+  MessageCore.stop();
+  Utils.callGC();
+  MessageCore.start();
+}, {
+  scheduled: true,
+  timezone: "America/Sao_Paulo"
+});
+
 process.on("exit", (code) => {
   console.clear();
   console.log(`About to exit with code: ${code}`);
@@ -114,13 +125,15 @@ process.on("exit", (code) => {
   global.eventEmitter.removeAllListeners("addMessage");
   global.eventEmitter.removeAllListeners("removeMessage");
   global.eventEmitter.removeAllListeners("queueMove");
-  global.scheduledQueue = [];
   MessageCore.stop();
   DataManager.stop();
+  task.stop();
 });
+
 
 app.listen(2000, function () {
   console.log("Starting server on", 2000);
+  task.start();
   MessageCore.start();
   DataManager.start();
 });

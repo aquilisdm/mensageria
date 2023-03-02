@@ -11,6 +11,7 @@ const Utils = require("../logic/Utils");
 const Constants = require("../logic/Constants");
 const ClientManager = require("../modules/Client/ClientManager");
 const CompanyService = require("../modules/Company/CompanyService");
+const MongoDB = require("../logic/MongoDB");
 const BASE = "MessageCore:";
 var monitorIntervalEvent = null;
 var queryInterval = null;
@@ -20,90 +21,104 @@ var intervalEventChecker = null;
  * Functions
  */
 
+async function emptyQueue() {
+  let mongoClient = await MongoDB.getDatabase();
+  const database = mongoClient.db(MongoDB.dbName);
+  const collection = database.collection(
+    MessageUtils.getMessageCollectionName()
+  );
+
+  return await collection.deleteMany({ CANAL: Constants.CHANNEL.awaiting });
+}
+
 async function processBlockedMessages(blockedMessages) {
-  if (Array.isArray(blockedMessages) && blockedMessages.length > 0) {
-    blockedMessages.forEach(async (message) => {
-      if (message.CODIGO_TIPO_MENSAGEM == 1) {
-        MessageRepository.updateMessageStatus(
-          message.CODIGO_MENSAGEM,
-          message.ACEITA_PROMOCOES === "SIM"
-            ? Constants.CHANNEL.notAllowed
-            : Constants.CHANNEL.noMarketing,
-          "0"
-        );
-      } else {
-        MessageRepository.updateMessageStatus(
-          message.CODIGO_MENSAGEM,
-          Constants.CHANNEL.notAllowed,
-          "0"
+  try {
+    if (Array.isArray(blockedMessages) && blockedMessages.length > 0) {
+      let mongoClient = await MongoDB.getDatabase();
+      const database = mongoClient.db(MongoDB.dbName);
+      const collection = database.collection(
+        MessageUtils.getMessageCollectionName()
+      );
+
+      for (let i = 0; i < blockedMessages.length; i++) {
+        await collection.updateOne(
+          blockedMessages[i],
+          {
+            $set: {
+              CODIGO_MENSAGEM: blockedMessages[i].CODIGO_MENSAGEM,
+            },
+          },
+          { upsert: true }
         );
       }
-    });
+      mongoClient.close();
+    }
+  } catch (err) {
+    console.log(err);
   }
 }
 
 async function processSMSMessages(pendingSMSMessages) {
-  if (Array.isArray(pendingSMSMessages) && pendingSMSMessages.length > 0) {
-    pendingSMSMessages.forEach((message) => {
-      if (
-        Array.from(global.smsScheduledQueue).filter((value) => {
-          return message.CODIGO_MENSAGEM === value.CODIGO_MENSAGEM;
-        }).length <= 0
-      ) {
-        global.smsScheduledQueue.push(message);
-      } else {
-        Logger.info(
-          "Tried to add more then one message with the same code: " +
-            message.CODIGO_MENSAGEM,
-          "MessageCore.processSMSMessages()",
+  try {
+    if (Array.isArray(pendingSMSMessages) && pendingSMSMessages.length > 0) {
+      let mongoClient = await MongoDB.getDatabase();
+      const database = mongoClient.db(MongoDB.dbName);
+      const collection = database.collection(
+        MessageUtils.getMessageCollectionName()
+      );
+
+      for (let i = 0; i < pendingSMSMessages.length; i++) {
+        await collection.updateOne(
+          pendingSMSMessages[i],
           {
-            messageId: message.CODIGO_MENSAGEM,
-            targetNumber: message.CELULAR,
-            channel: message.CANAL,
-            isAllowed: message.PERMITE,
-            dueDate: message.DATA_VALIDADE,
-            priority: message.PRIORIDADE_ENVIO,
-            date: Utils.convertTZ(new Date(), "America/Sao_Paulo").toString(),
-          }
+            $set: {
+              CODIGO_MENSAGEM: pendingSMSMessages[i].CODIGO_MENSAGEM,
+            },
+          },
+          { upsert: true }
         );
       }
-    });
+      mongoClient.close();
+    }
+  } catch (err) {
+    console.log(err);
   }
 }
 
 async function processWhatsAppMessages(pendingWhatsAppMessages) {
-  if (
-    Array.isArray(pendingWhatsAppMessages) &&
-    pendingWhatsAppMessages.length > 0
-  ) {
-    pendingWhatsAppMessages.forEach((message) => {
-      if (
-        Array.from(global.scheduledQueue).filter((value) => {
-          return message.CODIGO_MENSAGEM === value.CODIGO_MENSAGEM;
-        }).length <= 0
-      ) {
-        global.scheduledQueue.push(message);
-      } else {
-        Logger.info(
-          "Tried to add more then one message with the same code: " +
-            message.CODIGO_MENSAGEM,
-          "MessageCore.fetchPendingMessages()",
+  try {
+    if (
+      Array.isArray(pendingWhatsAppMessages) &&
+      pendingWhatsAppMessages.length > 0
+    ) {
+      let mongoClient = await MongoDB.getDatabase();
+      const database = mongoClient.db(MongoDB.dbName);
+      const collection = database.collection(
+        MessageUtils.getMessageCollectionName()
+      );
+
+      for (let i = 0; i < pendingWhatsAppMessages.length; i++) {
+        await collection.updateOne(
+          pendingWhatsAppMessages[i],
           {
-            messageId: message.CODIGO_MENSAGEM,
-            targetNumber: message.CELULAR,
-            channel: message.CANAL,
-            isAllowed: message.PERMITE,
-            dueDate: message.DATA_VALIDADE,
-            priority: message.PRIORIDADE_ENVIO,
-            date: Utils.convertTZ(new Date(), "America/Sao_Paulo").toString(),
-          }
+            $set: {
+              CODIGO_MENSAGEM: pendingWhatsAppMessages[i].CODIGO_MENSAGEM,
+            },
+          },
+          { upsert: true }
         );
       }
-    });
+      mongoClient.close();
+    }
+  } catch (err) {
+    console.log(err);
   }
 }
 
 async function initServiceCore() {
+  //Empty queue before starting any process...
+  await emptyQueue();
+
   console.log("Trying to start service core...");
   let queryInt = await MessageRepository.fetchQueryInterval();
 
@@ -123,12 +138,10 @@ async function initServiceCore() {
       );
       console.log(BASE + " Query event has been started");
     }
-
-    global.eventSessionInfo.queryEventTime = queryInterval;
   }
 
   if (monitorIntervalEvent === null) {
-    monitorIntervalEvent = setInterval(sendLogsToMonitors, 3600000);
+    monitorIntervalEvent = setInterval(sendLogs, 3600000);
   }
 
   if (intervalEventChecker === null) {
@@ -190,54 +203,62 @@ async function checkEventInterval() {
   }
 }
 
-async function sendLogsToMonitors() {
-  //WhatsApp version
-  console.clear();
-  if (await MessageUtils.shouldSendWhatsApp()) {
-    console.log("Sending logs to the following people...");
-    let monitors = await MessageRepository.fetchMonitors();
-    console.log(JSON.stringify(monitors));
+async function sendLogs() {
+  try {
+    //WhatsApp version
+    console.clear();
+    if (await MessageUtils.shouldSendWhatsApp()) {
+      console.log("Sending logs to the following people...");
+      let monitors = await MessageRepository.fetchMonitors();
+      console.log(JSON.stringify(monitors));
 
-    if (Array.isArray(monitors) && monitors.length > 0) {
-      let allCompanyDevices = await MessageUtils.fetchAllCompanyDevices();
-      //Company id number 1 is always 'Zap Grafica'
-      let device = MessageUtils.selectSeqDevice(allCompanyDevices[1]);
-      let currentClientId =
-        device !== undefined && device !== null ? device.clientId : undefined;
-      let currentDate = Utils.convertTZ(new Date(), "America/Sao_Paulo")
-        .toLocaleDateString()
-        .split("/");
-      let date = Utils.convertTZ(new Date(), "America/Sao_Paulo");
+      if (Array.isArray(monitors) && monitors.length > 0) {
+        let allCompanyDevices = await MessageUtils.fetchAllCompanyDevices();
+        //Company id number 1 is always 'Zap Grafica'
+        let device = MessageUtils.selectSeqDevice(allCompanyDevices[1]);
+        let currentClientId =
+          device !== undefined && device !== null ? device.clientId : undefined;
+        let currentDate = Utils.convertTZ(new Date(), "America/Sao_Paulo")
+          .toLocaleDateString()
+          .split("/");
+        let date = Utils.convertTZ(new Date(), "America/Sao_Paulo");
 
-      currentDate =
-        currentDate[1] + "/" + currentDate[0] + "/" + currentDate[2];
-      currentDate += ` entre ${
-        date.getHours().toString().length == 1
-          ? "0" + date.getHours()
-          : date.getHours()
-      }:00 e ${date.getHours() + 1 > 23 ? "00" : date.getHours() + 1}:00`;
+        currentDate =
+          currentDate[1] + "/" + currentDate[0] + "/" + currentDate[2];
+        currentDate += ` entre ${
+          date.getHours().toString().length == 1
+            ? "0" + date.getHours()
+            : date.getHours()
+        }:00 e ${date.getHours() + 1 > 23 ? "00" : date.getHours() + 1}:00`;
 
-      if (currentClientId !== undefined && currentClientId !== null) {
-        for (let i = 0; i < monitors.length; i++) {
-          let formattedNumber = Utils.formatNumber(monitors[i]);
-          if (formattedNumber !== null) {
-            let count = await MessageRepository.fetchSentMessagesCount();
+        if (currentClientId !== undefined && currentClientId !== null) {
+          for (let i = 0; i < monitors.length; i++) {
+            let formattedNumber = Utils.formatNumber(monitors[i]);
+            if (formattedNumber !== null) {
+              let count = await MessageRepository.fetchSentMessagesCount();
 
-            await MessageService.sendWhatsAppMessage(
-              currentClientId,
-              formattedNumber,
-              `*${
-                Array.isArray(count) && count.length > 0
-                  ? count[0]
-                  : "UNAVAILABLE"
-              }* mensagens foram enviadas.\n*${currentDate}*`
-            );
+              await MessageService.sendWhatsAppMessage(
+                currentClientId,
+                formattedNumber,
+                `*${
+                  Array.isArray(count) && count.length > 0
+                    ? count[0]
+                    : "UNAVAILABLE"
+                }* mensagens foram enviadas.\n*${currentDate}*`
+              );
+            }
           }
         }
       }
+    } else {
+      ClientManager.destroyAllClientSessions();
     }
-  } else {
-    ClientManager.destroyAllClientSessions();
+  } catch (err) {
+    console.log(err);
+  } finally {
+    //Call the garbage collector each hour
+    //The event above will run each 60 minutes
+    Utils.callGC();
   }
 }
 
@@ -253,22 +274,24 @@ async function fetchPendingMessages() {
         await MessageRepository.fetchPendingWhatsAppMessages();
       processWhatsAppMessages(pendingWhatsAppMessages);
       shouldProcessBlockedMessages = true;
-      global.eventEmitter.emit("queueMove", pendingWhatsAppMessages);
+
+      if (process.env.NODE_ENV == Constants.PRODUCTION_ENV)
+        global.eventEmitter.emit("queueMove", pendingWhatsAppMessages);
     }
 
-    /*
     if (await MessageUtils.shouldSendSMS()) {
       pendingSMSMessages = await MessageRepository.fetchPendingSmsMessages();
       processSMSMessages(pendingSMSMessages);
       shouldProcessBlockedMessages = true;
     }
-    */
 
     if (shouldProcessBlockedMessages) {
       pendingBlockedMessages =
         await MessageRepository.fetchClientBlockedMessages();
       processBlockedMessages(pendingBlockedMessages);
-      global.eventEmitter.emit("queueMove", pendingBlockedMessages);
+
+      if (process.env.NODE_ENV == Constants.PRODUCTION_ENV)
+        global.eventEmitter.emit("queueMove", pendingBlockedMessages);
     }
   } catch (err) {
     console.log(err);
@@ -284,7 +307,7 @@ const MessageCore = {
     //Init whatsapp and sms services
     initServiceCore();
     WhatsAppScheduler.start();
-    //SmsScheduler.start();
+    SmsScheduler.start();
   },
   stop: function () {
     console.clear();
@@ -294,7 +317,7 @@ const MessageCore = {
     clearInterval(monitorIntervalEvent);
     global.queryIntervalEvent = null;
     monitorIntervalEvent = null;
-
+    emptyQueue();
     WhatsAppScheduler.stop();
     SmsScheduler.stop();
   },

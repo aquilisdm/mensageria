@@ -2,8 +2,14 @@ const ClientManager = require("../../modules/Client/ClientManager");
 const CompanyService = require("../../modules/Company/CompanyService");
 const MessageRepository = require("../../modules/Messages/MessageRepository");
 const Utils = require("../../logic/Utils");
+const Constants = require('../../logic/Constants');
 
 const MessageUtils = {
+  getMessageCollectionName: function () {
+    return process.env.NODE_ENV === Constants.PRODUCTION_ENV
+      ? "messages"
+      : "messages_dev";
+  },
   shouldSendSMS: async function () {
     try {
       let shouldSendSMS = await MessageRepository.fetchShouldSendSMS();

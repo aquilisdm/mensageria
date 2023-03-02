@@ -194,7 +194,7 @@ router.get("/requestQR/:token", function (req, res, next) {
   }
 
   let decoded = Authentication.verifyToken(req.params.token);
-
+  
   if (decoded !== null) {
     var sseId = new Date().toLocaleTimeString();
 
@@ -277,14 +277,14 @@ router.post(
     if (ip == undefined || ip == null) {
       ip = req.headers["x-access-token"];
     }
-
+    
     const rateLimiter = new RateLimiterMemory(opts);
 
     rateLimiter
       .consume(ip, 1) // consume 1 point
       .then(async (rateLimiterRes) => {
         if (validator.isLength(req.body.number, { min: 11, max: 13 })) {
-          let resp = await MessageService.getNumberId(req.body.number);
+          let resp = await MessageService.getNumberId(req.body.number,req.body.clientId);
 
           return res.json({
             success: resp.success,

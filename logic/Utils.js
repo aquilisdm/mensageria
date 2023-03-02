@@ -1,4 +1,16 @@
 const Utils = {
+  callGC: function () {
+    //This function should be used too often, it will pause your
+    //node app until the GC completes.
+    try {
+      if (global.gc) {
+        global.gc();
+      }
+    } catch (e) {
+      console.log("`use --expose-gc when starting your application`");
+      process.exit();
+    }
+  },
   isEmpty: function (string) {
     return string === undefined || string === null || string === "";
   },

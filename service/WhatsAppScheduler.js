@@ -7,98 +7,142 @@ const Logger = require("../logic/Logger");
 const Utils = require("../logic/Utils");
 const Constants = require("../logic/Constants");
 const MessageUtils = require("./logic/MessageUtils");
+const MongoDB = require("../logic/MongoDB");
 const BASE = "WhatsAppScheduler:";
 var intervalCount = null;
-
-/*
- * Functions
- */
-
-async function next() {
-  WhatsAppScheduler.stopIntervalEvent();
-  await processQueueOne();
-  WhatsAppScheduler.startIntervalEvent();
-}
 
 /*
  * Events
  */
 
 async function processQueueDevelopment() {
+  //DEVELOPMENT FUNCTION NOT AVAILABLE IN PRODUCTION
+  var mongoClient = await MongoDB.getDatabase().catch((err) => {
+    console.log(err);
+  });
+
   try {
-    if (await MessageUtils.shouldSendWhatsApp()) {
-      let pendingMessage = global.scheduledQueue.shift();
+    if ((await MessageUtils.shouldSendWhatsApp()) && mongoClient !== null) {
+      const database = mongoClient.db(MongoDB.dbName);
+      const collection = database.collection(
+        MessageUtils.getMessageCollectionName()
+      );
+
+      var pendingMessage = await collection.findOneAndDelete(
+        {},
+        { sort: { _id: 1 } }
+      );
+      pendingMessage =
+        pendingMessage !== null &&
+        pendingMessage !== undefined &&
+        typeof pendingMessage === "object"
+          ? pendingMessage.value
+          : null;
+
       let currentClientId = null;
       let formattedNumber = null;
       let device = null;
       if (pendingMessage !== null && pendingMessage !== undefined) {
-        console.log(
-          "Sending message with code: " + pendingMessage.CODIGO_MENSAGEM
-        );
-        let allCompanyDevices = await MessageUtils.fetchAllCompanyDevices();
-        //Send messages
-        formattedNumber = Utils.formatNumber("31996934484");
-        let companyCode = !Utils.isEmpty(pendingMessage.CODIGO_EMPRESA)
-          ? pendingMessage.CODIGO_EMPRESA
-          : 1;
-        device = MessageUtils.selectSeqDevice(allCompanyDevices[companyCode]);
+        if (pendingMessage.ACEITA_WHATSAPP === "SIM") {
+          if (
+            pendingMessage.CODIGO_TIPO_MENSAGEM == 1 &&
+            pendingMessage.ACEITA_PROMOCOES === "NÃO"
+          ) {
+            console.log("Cliente não aceita promoções");
+            return;
+          }
 
-        currentClientId =
-          device !== undefined && device !== null ? device.clientId : undefined;
+          let allCompanyDevices = await MessageUtils.fetchAllCompanyDevices();
+          let companyCode = !Utils.isEmpty(pendingMessage.CODIGO_EMPRESA)
+            ? pendingMessage.CODIGO_EMPRESA
+            : 1;
 
-        if (
-          formattedNumber !== null &&
-          currentClientId !== undefined &&
-          currentClientId !== null
-        ) {
-          response = await MessageService.sendWhatsAppMessage(
-            currentClientId,
-            formattedNumber,
-            Utils.formatUnicodeToEmojisInText(
-              "This is a development test, please ignore..."
-            )
-          ).catch((err) => {
-            response = {
-              success: false,
-              message: err,
-            };
-          });
-        } else
-          response = {
-            success: false,
-            message: "The phone number or the clientId is invalid",
-          };
+          if (
+            Array.isArray(allCompanyDevices[companyCode]) &&
+            allCompanyDevices[companyCode].length > 0
+          ) {
+            console.log(
+              "Sending message with code: " + pendingMessage.CODIGO_MENSAGEM
+            );
+            //Send messages
+            formattedNumber = Utils.formatNumber("31996934484");
+            device = MessageUtils.selectSeqDevice(
+              allCompanyDevices[companyCode]
+            );
+            var LocalStorage = require("node-localstorage").LocalStorage;
+            localStorage = new LocalStorage("./dev");
+            currentClientId = localStorage.getItem("DEV_DEVICE_ID");
 
-        if (response.success === false && !pendingMessage.ACEITA_SMS) {
-          console.log(
-            "DEV: Message with code: " +
-              pendingMessage.CODIGO_MENSAGEM +
-              " failed"
-          );
-        } else if (response.success === false && pendingMessage.ACEITA_SMS) {
-          console.log(
-            "DEV: Message with code " +
-              pendingMessage.CODIGO_MENSAGEM +
-              " will be sent via sms"
-          );
-        } else if (response.success === true) {
-          console.log(
-            "DEV: Message with code " +
-              pendingMessage.CODIGO_MENSAGEM +
-              " was sent successfully"
-          );
+            if (
+              formattedNumber !== null &&
+              currentClientId !== undefined &&
+              currentClientId !== null
+            ) {
+              response = await MessageService.sendWhatsAppMessage(
+                currentClientId,
+                formattedNumber,
+                Utils.formatUnicodeToEmojisInText(pendingMessage.WHATSAPP)
+              ).catch((err) => {
+                response = {
+                  success: false,
+                  message: err,
+                };
+              });
+            } else
+              response = {
+                success: false,
+                message: "The phone number or the clientId is invalid",
+              };
+
+            if (response.success === false) {
+              console.log(
+                "Message with code: " +
+                  pendingMessage.CODIGO_MENSAGEM +
+                  " failed"
+              );
+            } else if (response.success === true) {
+              console.log(
+                "Message with code " +
+                  pendingMessage.CODIGO_MENSAGEM +
+                  " was sent successfully"
+              );
+            }
+          }
         }
       }
     }
   } catch (err) {
-    console.log("processQueueDevelopment: " + err);
+    console.log(err);
+    Logger.error(err, "WhatsAppScheduler.processQueue()", {});
+  } finally {
+    mongoClient.close();
   }
 }
 
 async function processQueueOne() {
+  var mongoClient = await MongoDB.getDatabase().catch((err) => {
+    console.log(err);
+  });
+
   try {
-    if (await MessageUtils.shouldSendWhatsApp()) {
-      let pendingMessage = global.scheduledQueue.shift();
+    if ((await MessageUtils.shouldSendWhatsApp()) && mongoClient !== null) {
+      const database = mongoClient.db(MongoDB.dbName);
+      const collection = database.collection(
+        MessageUtils.getMessageCollectionName()
+      );
+
+      var pendingMessage = await collection.findOneAndDelete(
+        {},
+        { sort: { _id: 1 } }
+      );
+
+      pendingMessage =
+        pendingMessage !== null &&
+        pendingMessage !== undefined &&
+        typeof pendingMessage === "object"
+          ? pendingMessage.value
+          : null;
+
       let currentClientId = null;
       let formattedNumber = null;
       let device = null;
@@ -111,7 +155,7 @@ async function processQueueOne() {
             MessageRepository.updateMessageStatus(
               pendingMessage.CODIGO_MENSAGEM,
               Constants.CHANNEL.noMarketing,
-              "-1"
+              ""
             );
 
             return;
@@ -218,12 +262,12 @@ async function processQueueOne() {
           }
         }
       }
-    } else {
-      global.scheduledQueue = [];
     }
   } catch (err) {
     console.log(err);
     Logger.error(err, "WhatsAppScheduler.processQueue()", {});
+  } finally {
+    mongoClient.close();
   }
 }
 
@@ -264,13 +308,15 @@ const WhatsAppScheduler = {
         global.intervalEvent = setInterval(processQueueOne, intervalCount);
         console.log(BASE + " Message interval event has been re-started");
       }
-
-      global.eventSessionInfo.intervalEventTime = intervalCount;
+      
       console.log(
         BASE + "Scheduler is running... [count:" + intervalCount + "]"
       );
     } else if (process.env.NODE_ENV === Constants.DEVELOPMENT_ENV) {
-      global.intervalEvent = setInterval(processQueueDevelopment, 60000);
+      global.intervalEvent = setInterval(
+        processQueueDevelopment,
+        intervalCount
+      );
       console.log(
         BASE + "[DEV] Scheduler is running... [count:" + intervalCount + "]"
       );
@@ -279,7 +325,6 @@ const WhatsAppScheduler = {
   stop: function () {
     console.log(BASE + "Stopping message scheduler..");
     clearInterval(global.intervalEvent);
-    global.scheduledQueue = [];
     global.intervalEvent = null;
   },
   getIntervalCount: function () {

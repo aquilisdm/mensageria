@@ -27,7 +27,7 @@ async function processOldLogData() {
 
     await collection.deleteMany({
       status: "success",
-      "additionalDetails.messageRegisterDate": {
+      "date": {
         $gte: startDate,
         $lt: endDate,
       },
