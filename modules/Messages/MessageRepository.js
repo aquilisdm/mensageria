@@ -17,31 +17,36 @@ const MessageRepository = {
         }
         // If no error, then good to proceed.
         let request = new Request(
-          `SELECT TOP 100
+          `SELECT top 10800
           M.CODIGO_MENSAGEM,
+          M.CODIGO_PEDIDO,
+          M.CODIGO_ITEM,
           M.CODIGO_PARCEIRO,
+          M.CODIGO_CONTATO,
+          M.CELULAR,
+          M.DATA_AGENDADA,
+          M.DATA_ENVIO,
+          M.DATA_VALIDADE,
+          M.NOME_CAMPANHA,
+          
           M.WHATSAPP,
           M.SMS,
           M.CANAL,
-          M.CELULAR,
           M.DATA_CADASTRO,
-          M.NOME_CAMPANHA,
-          1 AS CODIGO_EMPRESA,
-          M.DATA_ENVIO,
+          M.CODIGO_EMPRESA,
+          
           M.CODIGO_TIPO_MENSAGEM,
-          M.DATA_VALIDADE,
-          M.DATA_AGENDADA,
           TM.PRIORIDADE_ENVIO,
           PM.PERMITE,
           CP.WHATSAPP as ACEITA_WHATSAPP,
-          CP.PROMOCOES as ACEITA_PROMOCOES, 
+          CP.PROMOCOES as ACEITA_PROMOCOES,
           CP.SMS AS ACEITA_SMS
         FROM Mensageria.MENSAGENS_AGENDADAS M
         JOIN Mensageria.TIPO_MENSAGENS TM ON TM.CODIGO_TIPO_MENSAGEM = M.CODIGO_TIPO_MENSAGEM
         LEFT JOIN Mensageria.PERMITE_MARKETING PM ON PM.CODIGO_PARCEIRO = M.CODIGO_PARCEIRO
         JOIN Mensageria.CONTATOS_PERMISSOES CP ON CP.CODIGO_CONTATO = M.CODIGO_CONTATO
-        WHERE CANAL = 'AGUARDANDO ENVIO'
-        AND M.DATA_VALIDADE >= CAST(GETDATE() AS DATE)
+        WHERE
+        M.DATA_VALIDADE >= CAST(GETDATE() AS DATE)
         AND M.DATA_AGENDADA <= GETDATE()
         AND (M.CODIGO_TIPO_MENSAGEM <> 1 OR PM.PERMITE = 'SIM')
         AND CAST(GETDATE() AS TIME) > TM.HORA_INICIO
@@ -277,7 +282,7 @@ const MessageRepository = {
       connection.connect();
     });
   },
-  fetchPendingWhatsAppMessages: function () {
+  fetchPendingWhatsAppMessages: function () {//Add this line when the SMS is done AND CP.WHATSAPP = 'SIM'
     return new Promise((resolve, reject) => {
       const connection = SQLServer.getConnection();
       var result = [];
@@ -314,7 +319,6 @@ const MessageRepository = {
         JOIN Mensageria.CONTATOS_PERMISSOES CP ON CP.CODIGO_CONTATO = M.CODIGO_CONTATO
         WHERE CANAL = 'AGUARDANDO ENVIO'
         AND M.DATA_VALIDADE >= CAST(GETDATE() AS DATE)
-        AND CP.WHATSAPP = 'SIM'
         AND M.DATA_AGENDADA <= GETDATE()
         AND (M.CODIGO_TIPO_MENSAGEM <> 1 OR PM.PERMITE = 'SIM')
         AND CAST(GETDATE() AS TIME) > TM.HORA_INICIO

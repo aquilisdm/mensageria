@@ -111,7 +111,7 @@ async function processQueueOne() {
             MessageRepository.updateMessageStatus(
               pendingMessage.CODIGO_MENSAGEM,
               Constants.CHANNEL.noMarketing,
-              "-1"
+              null
             );
 
             return;
@@ -121,30 +121,40 @@ async function processQueueOne() {
           let companyCode = !Utils.isEmpty(pendingMessage.CODIGO_EMPRESA)
             ? pendingMessage.CODIGO_EMPRESA
             : 1;
+          formattedNumber = Utils.formatNumber(pendingMessage.CELULAR);
 
           if (
             Array.isArray(allCompanyDevices[companyCode]) &&
-            allCompanyDevices[companyCode].length > 0
+            allCompanyDevices[companyCode].length > 0 &&
+            formattedNumber !== null
           ) {
             console.log(
               "Sending message with code: " + pendingMessage.CODIGO_MENSAGEM
             );
-            //Send messages
-            formattedNumber = Utils.formatNumber(pendingMessage.CELULAR);
-            device = MessageUtils.selectSeqDevice(
-              allCompanyDevices[companyCode]
-            );
+
+            //New devices should not send Marketing messages
+            if (pendingMessage.CODIGO_TIPO_MENSAGEM == 1) {
+              allCompanyDevices[companyCode] = allCompanyDevices[
+                companyCode
+              ].filter((value) => {
+                return value.isNewNumber === "NÃO";
+              });
+
+              device = MessageUtils.selectSeqMarketingDevice(
+                allCompanyDevices[companyCode]
+              );
+            } else {
+              device = MessageUtils.selectSeqDevice(
+                allCompanyDevices[companyCode]
+              );
+            }
 
             currentClientId =
               device !== undefined && device !== null
                 ? device.clientId
                 : undefined;
 
-            if (
-              formattedNumber !== null &&
-              currentClientId !== undefined &&
-              currentClientId !== null
-            ) {
+            if (currentClientId !== null && currentClientId !== undefined) {
               response = await MessageService.sendWhatsAppMessage(
                 currentClientId,
                 formattedNumber,
@@ -155,6 +165,11 @@ async function processQueueOne() {
                   message: err,
                 };
               });
+            } else if (
+              (currentClientId == null || currentClientId == undefined) &&
+              pendingMessage.CODIGO_TIPO_MENSAGEM == 1
+            ) {
+              return;
             } else
               response = {
                 success: false,
@@ -170,7 +185,7 @@ async function processQueueOne() {
               MessageRepository.updateMessageStatus(
                 pendingMessage.CODIGO_MENSAGEM,
                 Constants.CHANNEL.failed,
-                device !== undefined && device !== null ? device.number : ""
+                device !== undefined && device !== null ? device.number : null
               );
 
               Logger.error(
@@ -209,13 +224,21 @@ async function processQueueOne() {
               MessageRepository.updateMessageStatus(
                 pendingMessage.CODIGO_MENSAGEM,
                 Constants.CHANNEL.sentViaWhatsApp,
-                device !== undefined && device !== null ? device.number : ""
+                device !== undefined && device !== null ? device.number : null
               );
 
               pendingMessage.CANAL = Constants.CHANNEL.sentViaWhatsApp;
               global.eventEmitter.emit("queueMove", [pendingMessage]);
             }
           }
+        } else {
+          console.log("Cliente não permite: " + pendingMessage.CODIGO_MENSAGEM);
+          //TEMPORARIO
+          MessageRepository.updateMessageStatus(
+            pendingMessage.CODIGO_MENSAGEM,
+            Constants.CHANNEL.notAllowed,
+            null
+          );
         }
       }
     } else {

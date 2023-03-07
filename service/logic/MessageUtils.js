@@ -75,6 +75,18 @@ const MessageUtils = {
 
     return undefined;
   },
+  selectSeqMarketingDevice: function (deviceList) {
+    if (Array.isArray(deviceList) && deviceList.length > 0) {
+      if (global.lastMarketingDeviceIndex + 1 > deviceList.length - 1) {
+        global.lastMarketingDeviceIndex = 0;
+      } else
+        global.lastMarketingDeviceIndex = global.lastMarketingDeviceIndex + 1;
+
+      return deviceList[global.lastMarketingDeviceIndex];
+    }
+
+    return undefined;
+  }
 };
 
 module.exports = MessageUtils;

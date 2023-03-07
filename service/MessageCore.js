@@ -29,13 +29,13 @@ async function processBlockedMessages(blockedMessages) {
           message.ACEITA_PROMOCOES === "SIM"
             ? Constants.CHANNEL.notAllowed
             : Constants.CHANNEL.noMarketing,
-          "0"
+          null
         );
       } else {
         MessageRepository.updateMessageStatus(
           message.CODIGO_MENSAGEM,
           Constants.CHANNEL.notAllowed,
-          "0"
+          null
         );
       }
     });
@@ -249,11 +249,11 @@ async function fetchPendingMessages() {
     let shouldProcessBlockedMessages = false;
 
     if (await MessageUtils.shouldSendWhatsApp()) {
+      //Add this line when the SMS is done AND CP.WHATSAPP = 'SIM'
       pendingWhatsAppMessages =
         await MessageRepository.fetchPendingWhatsAppMessages();
       processWhatsAppMessages(pendingWhatsAppMessages);
       shouldProcessBlockedMessages = true;
-      global.eventEmitter.emit("queueMove", pendingWhatsAppMessages);
     }
 
     /*
@@ -268,7 +268,6 @@ async function fetchPendingMessages() {
       pendingBlockedMessages =
         await MessageRepository.fetchClientBlockedMessages();
       processBlockedMessages(pendingBlockedMessages);
-      global.eventEmitter.emit("queueMove", pendingBlockedMessages);
     }
   } catch (err) {
     console.log(err);
