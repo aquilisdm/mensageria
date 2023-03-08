@@ -32,29 +32,24 @@ async function emptyQueue() {
 }
 
 async function processBlockedMessages(blockedMessages) {
-  try {
-    if (Array.isArray(blockedMessages) && blockedMessages.length > 0) {
-      let mongoClient = await MongoDB.getDatabase();
-      const database = mongoClient.db(MongoDB.dbName);
-      const collection = database.collection(
-        MessageUtils.getMessageCollectionName()
-      );
-
-      for (let i = 0; i < blockedMessages.length; i++) {
-        await collection.updateOne(
-          blockedMessages[i],
-          {
-            $set: {
-              CODIGO_MENSAGEM: blockedMessages[i].CODIGO_MENSAGEM,
-            },
-          },
-          { upsert: true }
+  if (Array.isArray(blockedMessages) && blockedMessages.length > 0) {
+    blockedMessages.forEach(async (message) => {
+      if (message.CODIGO_TIPO_MENSAGEM == 1) {
+        MessageRepository.updateMessageStatus(
+          message.CODIGO_MENSAGEM,
+          message.ACEITA_PROMOCOES === "SIM"
+            ? Constants.CHANNEL.notAllowed
+            : Constants.CHANNEL.noMarketing,
+          null
+        );
+      } else {
+        MessageRepository.updateMessageStatus(
+          message.CODIGO_MENSAGEM,
+          Constants.CHANNEL.notAllowed,
+          null
         );
       }
-      mongoClient.close();
-    }
-  } catch (err) {
-    console.log(err);
+    });
   }
 }
 
@@ -134,7 +129,7 @@ async function initServiceCore() {
     if (global.queryIntervalEvent === null) {
       global.queryIntervalEvent = setInterval(
         fetchPendingMessages,
-        queryInterval
+        120000 //DEV
       );
       console.log(BASE + " Query event has been started");
     }
@@ -270,13 +265,11 @@ async function fetchPendingMessages() {
     let shouldProcessBlockedMessages = false;
 
     if (await MessageUtils.shouldSendWhatsApp()) {
+      //Add this line when the SMS is done AND CP.WHATSAPP = 'SIM'
       pendingWhatsAppMessages =
         await MessageRepository.fetchPendingWhatsAppMessages();
       processWhatsAppMessages(pendingWhatsAppMessages);
       shouldProcessBlockedMessages = true;
-
-      if (process.env.NODE_ENV == Constants.PRODUCTION_ENV)
-        global.eventEmitter.emit("queueMove", pendingWhatsAppMessages);
     }
 
     if (await MessageUtils.shouldSendSMS()) {
@@ -289,9 +282,6 @@ async function fetchPendingMessages() {
       pendingBlockedMessages =
         await MessageRepository.fetchClientBlockedMessages();
       processBlockedMessages(pendingBlockedMessages);
-
-      if (process.env.NODE_ENV == Constants.PRODUCTION_ENV)
-        global.eventEmitter.emit("queueMove", pendingBlockedMessages);
     }
   } catch (err) {
     console.log(err);

@@ -22,6 +22,14 @@ var statusCallBack = "";
  * Functions
  */
 
+function getTemplateParams(params) {
+  if (params !== null && params !== undefined) {
+    return params.split(";");
+  }
+
+  return [];
+}
+
 function extractTemplateParamsFromRawText(text, messageType) {
   try {
     if (messageType !== null && text !== null) {
@@ -52,16 +60,16 @@ function extractTemplateParamsFromRawText(text, messageType) {
           return params;
 
         default:
-          return ["",""];
+          return ["", ""];
           break;
       }
     }
   } catch (err) {
     console.log(err);
-    return ["",""];
+    return ["", ""];
   }
 
-  return ["",""];
+  return ["", ""];
 }
 
 function initDiffSms(receiver, templateId, templateParas, signature) {
@@ -94,6 +102,56 @@ function buildWsseHeader(appKey, appSecret) {
     nonce,
     time
   );
+}
+
+function sendSMSInfo(number, message) {
+  let urlOb = url.parse("https://paineljob.com.br/api_painel/Api_bulk.php");
+
+  var options = {
+    host: urlOb.hostname, //Host name
+    port: urlOb.port, //Port
+    path: urlOb.pathname, //URI
+    method: "POST", //The request method is POST.
+    headers: {
+      "Content-Type": "application/json",
+    },
+    rejectUnauthorized: false, //Ignore the certificate trust issues to prevent API calling failures caused by HTTPS certificate authentication failures.
+  };
+
+  var body = JSON.stringify({
+    user: Constants.INFO_USER,
+    psw: Constants.INFO_PSW,
+    rota: Constants.INFO_ROUTE,
+    mensagens: [
+      {
+        celular: number,
+        msg: message,
+        id: new Date().toLocaleTimeString(),
+        carteira: "INFOQUALY",
+      },
+    ],
+  });
+
+  var req = https.request(options, (res) => {
+    console.log("statusCode:", res.statusCode); //The response code is recorded.
+
+    res.setEncoding("utf8"); //Set the response data encoding format.
+    res.on("data", (d) => {
+      console.log("resp:", d); //The response data is recorded.
+
+      if (res.statusCode == 200) {
+        resolve({ success: true, responseMessage: d });
+      } else resolve({ success: false, responseMessage: d });
+    });
+  });
+
+  req.on("error", (e) => {
+    console.error(e.message); //When a request error occurs, error details are recorded.
+    resolve({ success: false, responseMessage: e });
+  });
+
+  req.write(body); //Send data in the request body.
+  req.end(); //End the request.
 }
 
 function sendSMS(receiver, templateId, templateParams) {
@@ -235,7 +293,7 @@ async function processQueue() {
             MessageRepository.updateMessageStatus(
               pendingMessage.CODIGO_MENSAGEM,
               Constants.CHANNEL.noMarketing,
-              ""
+              null
             );
 
             return;
@@ -247,15 +305,23 @@ async function processQueue() {
           if (formattedNumber !== null) {
             if (
               pendingMessage.TEMPLATE_SMS_HUAWEI !== undefined &&
-              pendingMessage.TEMPLATE_SMS_HUAWEI !== null
+              pendingMessage.TEMPLATE_SMS_HUAWEI !== null &&
+              pendingMessage.VARIAVEIS !== undefined
             ) {
               response = await sendSMS(
                 "+" + formattedNumber,
                 pendingMessage.TEMPLATE_SMS_HUAWEI,
-                extractTemplateParamsFromRawText(pendingMessage.SMS,pendingMessage.NOME_TIPO_MENSAGEM)
+                getTemplateParams(pendingMessage.VARIAVEIS) //extractTemplateParamsFromRawText(pendingMessage.SMS,pendingMessage.NOME_TIPO_MENSAGEM)
               ).catch((err) => {
                 console.log(err);
               });
+
+              if (response.success === false) {
+                console.log(
+                  "Failed to send sms via Huawei Platform, trying to send by INFOQUALY..."
+                );
+                //response = await sendSMSInfo(formattedNumber,pendingMessage.SMS);
+              }
             } else
               response = {
                 success: false,
@@ -264,14 +330,15 @@ async function processQueue() {
           } else
             response = {
               success: false,
-              message: "The phone number is invalid",
+              message:
+                "The phone number is invalid or template params are not available.",
             };
 
           if (response.success === false) {
             MessageRepository.updateMessageStatus(
               pendingMessage.CODIGO_MENSAGEM,
               Constants.CHANNEL.failed,
-              device !== undefined && device !== null ? device.number : ""
+              device !== undefined && device !== null ? device.number : null
             );
 
             Logger.error(response.message, "SmsScheduler.processQueue()", {
@@ -280,9 +347,13 @@ async function processQueue() {
                 : pendingMessage.CELULAR.trim(),
               formattedTargetNumber: formattedNumber,
               messageId: pendingMessage.CODIGO_MENSAGEM,
+              validTil: Utils.isDate(new Date(pendingMessage.DATA_VALIDADE))
+                ? new Date(pendingMessage.DATA_VALIDADE)
+                : pendingMessage.DATA_VALIDADE,
               messageRegisterDate: pendingMessage.DATA_CADASTRO,
               messageTypeCode: pendingMessage.CODIGO_TIPO_MENSAGEM,
               apiResponse: response.responseMessage,
+              templateVariables: pendingMessage.VARIAVEIS,
               status: "failed",
             });
           } else {
@@ -298,10 +369,14 @@ async function processQueue() {
                 : pendingMessage.CELULAR.trim(),
               formattedTargetNumber: formattedNumber,
               messageId: pendingMessage.CODIGO_MENSAGEM,
+              validTil: Utils.isDate(new Date(pendingMessage.DATA_VALIDADE))
+                ? new Date(pendingMessage.DATA_VALIDADE)
+                : pendingMessage.DATA_VALIDADE,
               messageRegisterDate: pendingMessage.DATA_CADASTRO,
               messageTypeCode: pendingMessage.CODIGO_TIPO_MENSAGEM,
               pendingMessageCompany: pendingMessage.CODIGO_EMPRESA,
               apiResponse: response.responseMessage,
+              templateVariables: pendingMessage.VARIAVEIS,
               status: "success",
             });
           }
@@ -353,7 +428,7 @@ const SmsScheduler = {
         global.smsIntervalEvent = setInterval(processQueue, intervalCount);
         console.log(BASE + " Message interval event has been re-started");
       }
-      
+
       console.log(BASE + "Scheduler is running..." + intervalCount + "]");
     }
   },

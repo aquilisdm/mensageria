@@ -6,7 +6,7 @@ const process = require("node:process");
 const EventEmitter = require("events");
 const cors = require("cors");
 const Utils = require("./logic/Utils");
-var cron = require('node-cron');
+var cron = require("node-cron");
 global.clientMap = {};
 global.intervalEvent = null;
 global.queryIntervalEvent = null;
@@ -14,6 +14,7 @@ global.smsIntervalEvent = null;
 global.eventEmitter = new EventEmitter();
 global.eventEmitter.setMaxListeners(500);
 global.lastDeviceIndex = 0;
+global.lastMarketingDeviceIndex = 0;
 
 const MessagesController = require("./modules/Messages/MessagesController");
 const MessageCore = require("./service/MessageCore");
@@ -33,7 +34,7 @@ const DataManager = require("./service/DataManager");
 //https://support.huaweicloud.com/intl/en-us/devg-msgsms/sms_04_0008.html
 //https://support.huaweicloud.com/intl/en-us/usermanual-msgsms/sms_03_0011.html
 //https://developer.huawei.com/consumer/en/service/josp/agc/index.html#/unrealName
-
+  
 //https://developer.huawei.com/consumer/en/doc/start/api-0000001062522591
 //https://console-intl.huaweicloud.com/msgsms/?region=ap-southeast-1&locale=en-us#/msgsms/overview
 
@@ -106,16 +107,21 @@ app.use("/wp-users", UserController);
 app.use("/wp-config", ConfigController);
 app.use("/wp-company", CompanyController);
 
-
-var task = cron.schedule('0 23 * * *', () => {
-  console.log('Running a job at 11:00 PM at America/Sao_Paulo timezone');
-  MessageCore.stop();
-  Utils.callGC();
-  MessageCore.start();
-}, {
-  scheduled: true,
-  timezone: "America/Sao_Paulo"
-});
+var task = cron.schedule( 
+  "0 24 * * *",
+  () => {
+    console.log("Running a job at 2:00 AM at America/Sao_Paulo timezone");
+    MessageCore.stop();
+    DataManager.stop();
+    Utils.callGC();
+    MessageCore.start();
+    DataManager.start();
+  },
+  {
+    scheduled: true,
+    timezone: "America/Sao_Paulo",
+  }
+);
 
 process.on("exit", (code) => {
   console.clear();
@@ -130,10 +136,9 @@ process.on("exit", (code) => {
   task.stop();
 });
 
-
 app.listen(2000, function () {
   console.log("Starting server on", 2000);
-  task.start();
   MessageCore.start();
   DataManager.start();
+  task.start();
 });

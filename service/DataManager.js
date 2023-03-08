@@ -20,6 +20,7 @@ async function processOldLogData() {
       moment(new Date()).subtract(1, "week"),
       "America/Sao_Paulo"
     );
+
     let endDate = Utils.convertTZ(
       moment(new Date()).subtract(2, "day"),
       "America/Sao_Paulo"
@@ -27,7 +28,7 @@ async function processOldLogData() {
 
     await collection.deleteMany({
       status: "success",
-      "date": {
+      "additionalDetails.validTil": {
         $gte: startDate,
         $lt: endDate,
       },

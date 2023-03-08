@@ -17,31 +17,36 @@ const MessageRepository = {
         }
         // If no error, then good to proceed.
         let request = new Request(
-          `SELECT TOP 100
+          `SELECT top 10800
           M.CODIGO_MENSAGEM,
+          M.CODIGO_PEDIDO,
+          M.CODIGO_ITEM,
           M.CODIGO_PARCEIRO,
+          M.CODIGO_CONTATO,
+          M.CELULAR,
+          M.DATA_AGENDADA,
+          M.DATA_ENVIO,
+          M.DATA_VALIDADE,
+          M.NOME_CAMPANHA,
+          
           M.WHATSAPP,
           M.SMS,
           M.CANAL,
-          M.CELULAR,
           M.DATA_CADASTRO,
-          M.NOME_CAMPANHA,
-          1 AS CODIGO_EMPRESA,
-          M.DATA_ENVIO,
+          M.CODIGO_EMPRESA,
+          
           M.CODIGO_TIPO_MENSAGEM,
-          M.DATA_VALIDADE,
-          M.DATA_AGENDADA,
           TM.PRIORIDADE_ENVIO,
           PM.PERMITE,
           CP.WHATSAPP as ACEITA_WHATSAPP,
-          CP.PROMOCOES as ACEITA_PROMOCOES, 
+          CP.PROMOCOES as ACEITA_PROMOCOES,
           CP.SMS AS ACEITA_SMS
         FROM Mensageria.MENSAGENS_AGENDADAS M
         JOIN Mensageria.TIPO_MENSAGENS TM ON TM.CODIGO_TIPO_MENSAGEM = M.CODIGO_TIPO_MENSAGEM
         LEFT JOIN Mensageria.PERMITE_MARKETING PM ON PM.CODIGO_PARCEIRO = M.CODIGO_PARCEIRO
         JOIN Mensageria.CONTATOS_PERMISSOES CP ON CP.CODIGO_CONTATO = M.CODIGO_CONTATO
-        WHERE CANAL = 'AGUARDANDO ENVIO'
-        AND M.DATA_VALIDADE >= CAST(GETDATE() AS DATE)
+        WHERE
+        M.DATA_VALIDADE >= CAST(GETDATE() AS DATE)
         AND M.DATA_AGENDADA <= GETDATE()
         AND (M.CODIGO_TIPO_MENSAGEM <> 1 OR PM.PERMITE = 'SIM')
         AND CAST(GETDATE() AS TIME) > TM.HORA_INICIO
@@ -151,8 +156,6 @@ const MessageRepository = {
           M.CODIGO_TIPO_MENSAGEM,
           M.DATA_VALIDADE,
           TM.PRIORIDADE_ENVIO,
-          TM.TEMPLATE_SMS_HUAWEI,
-          TM.TEMPLATE_SMS_INFOQUALY,
           PM.PERMITE,
           CP.WHATSAPP as ACEITA_WHATSAPP,
           CP.PROMOCOES as ACEITA_PROMOCOES, 
@@ -230,9 +233,6 @@ const MessageRepository = {
           M.CODIGO_TIPO_MENSAGEM,
           M.DATA_VALIDADE,
           TM.PRIORIDADE_ENVIO,
-          TM.TEMPLATE_SMS_HUAWEI,
-          TM.TEMPLATE_SMS_INFOQUALY,
-          TM.NOME_TIPO_MENSAGEM,
           PM.PERMITE,
           CP.WHATSAPP as ACEITA_WHATSAPP,
           CP.PROMOCOES as ACEITA_PROMOCOES, 
@@ -282,7 +282,7 @@ const MessageRepository = {
       connection.connect();
     });
   },
-  fetchPendingWhatsAppMessages: function () {
+  fetchPendingWhatsAppMessages: function () { 
     return new Promise((resolve, reject) => {
       const connection = SQLServer.getConnection();
       var result = [];
@@ -318,8 +318,8 @@ const MessageRepository = {
         LEFT JOIN Mensageria.PERMITE_MARKETING PM ON PM.CODIGO_PARCEIRO = M.CODIGO_PARCEIRO
         JOIN Mensageria.CONTATOS_PERMISSOES CP ON CP.CODIGO_CONTATO = M.CODIGO_CONTATO
         WHERE CANAL = 'AGUARDANDO ENVIO'
-        AND M.DATA_VALIDADE >= CAST(GETDATE() AS DATE)
         AND CP.WHATSAPP = 'SIM'
+        AND M.DATA_VALIDADE >= CAST(GETDATE() AS DATE)
         AND M.DATA_AGENDADA <= GETDATE()
         AND (M.CODIGO_TIPO_MENSAGEM <> 1 OR PM.PERMITE = 'SIM')
         AND CAST(GETDATE() AS TIME) > TM.HORA_INICIO
@@ -354,100 +354,6 @@ const MessageRepository = {
         request.on("requestCompleted", function (rowCount, more) {
           connection.close();
           resolve(result);
-        });
-
-        connection.execSql(request);
-      });
-
-      connection.connect();
-    });
-  },
-  insertMessage: function (msg) {
-    return new Promise((resolve, reject) => {
-      const connection = SQLServer.getConnection();
-      var result = [];
-      connection.on("connect", function (err) {
-        if (err) {
-          Logger.error(err, "MessageRepository.insertMessage()", {});
-          resolve(false);
-        }
-        // If no error, then good to proceed.
-        let request = new Request(
-          `insert into Mensageria.MENSAGENS_AGENDADAS (CODIGO_PARCEIRO,
-            WHATSAPP,
-            SMS,
-            CANAL,
-            CELULAR,
-            CODIGO_CADASTRADOR,
-            CODIGO_ALTERADOR,
-            DATA_CADASTRO,
-            DATA_ALTERACAO,
-            NOME_USUARIO_COMPUTADOR,
-            IP,
-            NOME_CAMPANHA,
-            CODIGO_EMPRESA,
-            CODIGO_TIPO_MENSAGEM,
-            DATA_VALIDADE,
-            DATA_AGENDADA,
-            CODIGO_CONTATO) 
-            values (
-              @WHATSAPP,
-              @SMS,
-              @CANAL,
-              @CELULAR,
-              @CODIGO_CADASTRADOR,
-              @CODIGO_ALTERADOR,
-              (select SYSDATETIME()),
-              (select SYSDATETIME())
-              @NOME_USUARIO_COMPUTADOR,
-              @IP, 
-              @NOME_CAMPANHA,
-              @CODIGO_EMPRESA,
-              @CODIGO_TIPO_MENSAGEM,
-              @DATA_VALIDADE,
-              @DATA_AGENDADA,
-              @CODIGO_CONTATO
-            );`,
-          function (err) {
-            if (err) {
-              Logger.error(err, "MessageRepository.updateMessageStatus()", {});
-              console.log(err);
-              connection.close();
-              resolve(false);
-            }
-          }
-        );
-
-        request.addParameter("WHATSAPP", TYPES.NVarChar, msg.WHATSAPP);
-        request.addParameter("SMS", TYPES.NVarChar, msg.SMS);
-        request.addParameter("CANAL", TYPES.NVarChar, "AGUARDANDO ENVIO");
-        request.addParameter("CELULAR", TYPES.NVarChar, msg.CELULAR);
-        request.addParameter(
-          "CODIGO_CADASTRADOR",
-          TYPES.Int,
-          msg.CODIGO_CADASTRADOR
-        );
-        request.addParameter(
-          "CODIGO_ALTERADOR",
-          TYPES.Int,
-          msg.CODIGO_ALTERADOR
-        );
-        request.addParameter(
-          "NOME_USUARIO_COMPUTADOR",
-          TYPES.NVarChar,
-          msg.NOME_USUARIO_COMPUTADOR
-        );
-        request.addParameter("IP", TYPES.NVarChar, msg.IP);
-        request.addParameter(
-          "CODIGO_TIPO_MENSAGEM",
-          TYPES.Int,
-          msg.CODIGO_TIPO_MENSAGEM
-        );
-        request.addParameter("CODIGO_CONTATO", TYPES.Int, msg.CODIGO_CONTATO);
-
-        request.on("requestCompleted", function (rowCount, more) {
-          connection.close();
-          resolve(true);
         });
 
         connection.execSql(request);

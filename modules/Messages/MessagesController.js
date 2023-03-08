@@ -8,7 +8,7 @@ const validator = require("validator");
 const ClientManager = require("../Client/ClientManager");
 const { RateLimiterMemory } = require("rate-limiter-flexible");
 const opts = {
-  points: 1200, // 1200 points
+  points: 1700, // 1700 points
   duration: 1, // Per second
 };
 

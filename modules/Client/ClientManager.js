@@ -36,7 +36,7 @@ const ClientManager = {
         }
         // If no error, then good to proceed.
         let request = new Request(
-          `select top 200 Mensageria.DISPOSITIVOS.CHAVE as clientId,Mensageria.DISPOSITIVOS.DEVICE_INFO as deviceInfo,Mensageria.DISPOSITIVOS.CODIGO_CADASTRADOR as userId,Mensageria.DISPOSITIVOS.CELULAR as number from Mensageria.DISPOSITIVOS where CODIGO_EMPRESA = @id and ATIVO = 'SIM';`,
+          `select top 200 Mensageria.DISPOSITIVOS.CHAVE as clientId,Mensageria.DISPOSITIVOS.DEVICE_INFO as deviceInfo,Mensageria.DISPOSITIVOS.CODIGO_CADASTRADOR as userId,Mensageria.DISPOSITIVOS.CELULAR as number, Mensageria.DISPOSITIVOS.NUMERO_NOVO as isNewNumber from Mensageria.DISPOSITIVOS where CODIGO_EMPRESA = @id and ATIVO = 'SIM';`,
           function (err) {
             if (err) {
               console.log(err);
@@ -137,8 +137,9 @@ const ClientManager = {
         }
         // If no error, then good to proceed.
         let request = new Request(
-          `insert into Mensageria.DISPOSITIVOS (CELULAR,STATUS,CODIGO_CADASTRADOR,CODIGO_ALTERADOR,DATA_CADASTRO,DATA_ALTERACAO,IP,NOME_USUARIO_COMPUTADOR,CHAVE,ATIVO,DEVICE_INFO,CODIGO_EMPRESA) values (
-            @CELULAR,@STATUS,@CODIGO_CADASTRADOR,@CODIGO_ALTERADOR,(select SYSDATETIME()),(select SYSDATETIME()),@IP,@NOME_USUARIO_COMPUTADOR,@CHAVE,@ATIVO,@DEVICE_INFO,(SELECT Mensageria.USUARIOS_MENSAGERIA.CODIGO_EMPRESA FROM Mensageria.USUARIOS_MENSAGERIA WHERE Mensageria.USUARIOS_MENSAGERIA.CODIGO_USUARIO = ${userId})
+          `insert into Mensageria.DISPOSITIVOS (CELULAR,STATUS,CODIGO_CADASTRADOR,CODIGO_ALTERADOR,DATA_CADASTRO,DATA_ALTERACAO,IP,NOME_USUARIO_COMPUTADOR,CHAVE,ATIVO,DEVICE_INFO,CODIGO_EMPRESA,NUMERO_NOVO) values (
+            @CELULAR,@STATUS,@CODIGO_CADASTRADOR,@CODIGO_ALTERADOR,(select SYSDATETIME()),(select SYSDATETIME()),@IP,@NOME_USUARIO_COMPUTADOR,@CHAVE,@ATIVO,@DEVICE_INFO,(SELECT Mensageria.USUARIOS_MENSAGERIA.CODIGO_EMPRESA FROM Mensageria.USUARIOS_MENSAGERIA WHERE Mensageria.USUARIOS_MENSAGERIA.CODIGO_USUARIO = ${userId}),
+            'SIM'
           );`,
           function (err) {
             if (err) {
@@ -201,7 +202,7 @@ const ClientManager = {
         }
         // If no error, then good to proceed.
         let request = new Request(
-          `select top 200 Mensageria.DISPOSITIVOS.CHAVE as clientId,Mensageria.DISPOSITIVOS.DEVICE_INFO as deviceInfo,Mensageria.DISPOSITIVOS.CODIGO_CADASTRADOR as userId from Mensageria.DISPOSITIVOS where CODIGO_CADASTRADOR = @id and ATIVO = 'SIM';`,
+          `select top 200 Mensageria.DISPOSITIVOS.CHAVE as clientId,Mensageria.DISPOSITIVOS.DEVICE_INFO as deviceInfo,Mensageria.DISPOSITIVOS.CODIGO_CADASTRADOR as userId, Mensageria.DISPOSITIVOS.NUMERO_NOVO as isNewNumber from Mensageria.DISPOSITIVOS where CODIGO_CADASTRADOR = @id and ATIVO = 'SIM';`,
           function (err) {
             if (err) {
               console.log(err);
@@ -248,7 +249,7 @@ const ClientManager = {
     const client = new Client({
       puppeteer: {
         args: [
-	        "--no-sandbox",
+          "--no-sandbox",
           "--disable-setuid-sandbox",
           "--disable-dev-shm-usage",
           "--disable-accelerated-2d-canvas",
