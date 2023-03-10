@@ -5,6 +5,50 @@ var TYPES = require("tedious").TYPES;
 var Request = require("tedious").Request;
 
 const MessageRepository = {
+  fetchMessageModelByMessageTypeCode: function(code) {
+    return new Promise((resolve, reject) => {
+      const connection = SQLServer.getConnection();
+      var result = [];
+      connection.on("connect", function (err) {
+        if (err) {
+          Logger.error(err, "MessageRepository.fetchShouldSendSMS()", {});
+          reject(err);
+        }
+        // If no error, then good to proceed.
+        let request = new Request(
+          `select * from Mensageria.MODELOS where CODIGO_TIPO_MENSAGEM = @code;`,
+          function (err) {
+            if (err) {
+              Logger.error(err, "MessageRepository.fetchMessageModelByMessageTypeCode()", {});
+              console.log(err);
+              connection.close();
+              reject(err);
+            }
+          }
+        );
+
+        request.on("row", function (columns) {
+          columns = SQLServer.formatResponse(columns);
+          if (Array.isArray(columns)) {
+            columns.forEach(function (column) {
+              if (column !== null) {
+                result.push(column);
+              }
+            });
+          }
+        });
+
+        request.on("requestCompleted", function (rowCount, more) {
+          connection.close();
+          resolve(result);
+        });
+        request.addParameter("code", TYPES.Int, code);
+        connection.execSql(request);
+      });
+
+      connection.connect();
+    });
+  },
   fetchFilteredMessageQueue: function () {
     return new Promise((resolve, reject) => {
       const connection = SQLServer.getConnection();
@@ -12,7 +56,7 @@ const MessageRepository = {
 
       connection.on("connect", function (err) {
         if (err) {
-          Logger.error(err, "MessageRepository.fetchPendingSmsMessages()", {});
+          Logger.error(err, "MessageRepository.fetchMessageModelByMessageTypeCode()", {});
           reject(err);
         }
         // If no error, then good to proceed.
@@ -55,7 +99,7 @@ const MessageRepository = {
         ORDER BY TM.PRIORIDADE_ENVIO, M.DATA_AGENDADA;`,
           function (err) {
             if (err) {
-              Logger.error(err, "MessageRepository.fetchPendingMessages()", {});
+              Logger.error(err, "MessageRepository.fetchMessageModelByMessageTypeCode()", {});
               console.log(err);
               connection.close();
               reject(err);
@@ -218,9 +262,10 @@ const MessageRepository = {
         }
         // If no error, then good to proceed.
         let request = new Request(
-          `SELECT TOP 100
+          `SELECT TOP 900
           M.CODIGO_MENSAGEM,
           M.CODIGO_PARCEIRO,
+          M.CODIGO_ITEM,
           M.WHATSAPP,
           M.SMS,
           M.CANAL,
@@ -232,7 +277,10 @@ const MessageRepository = {
           M.DATA_ENVIO,
           M.CODIGO_TIPO_MENSAGEM,
           M.DATA_VALIDADE,
+          M.VARIAVEIS_SMS,
           TM.PRIORIDADE_ENVIO,
+          TM.TEMPLATE_SMS_HUAWEI,
+          TM.NOME_TIPO_MENSAGEM,
           PM.PERMITE,
           CP.WHATSAPP as ACEITA_WHATSAPP,
           CP.PROMOCOES as ACEITA_PROMOCOES, 
@@ -241,7 +289,8 @@ const MessageRepository = {
         JOIN Mensageria.TIPO_MENSAGENS TM ON TM.CODIGO_TIPO_MENSAGEM = M.CODIGO_TIPO_MENSAGEM
         LEFT JOIN Mensageria.PERMITE_MARKETING PM ON PM.CODIGO_PARCEIRO = M.CODIGO_PARCEIRO
         JOIN Mensageria.CONTATOS_PERMISSOES CP ON CP.CODIGO_CONTATO = M.CODIGO_CONTATO
-        WHERE CANAL = 'AGUARDANDO ENVIO'
+        WHERE (CANAL = 'AGUARDANDO ENVIO' or (M.CANAL = 'WHATSAPP' and M.CODIGO_TIPO_MENSAGEM = 2))
+        AND TM.TEMPLATE_SMS_HUAWEI is not null
         AND M.DATA_VALIDADE >= CAST(GETDATE() AS DATE)
         AND CP.SMS = 'SIM'
         AND M.DATA_AGENDADA <= GETDATE()
@@ -308,6 +357,7 @@ const MessageRepository = {
           M.DATA_ENVIO,
           M.CODIGO_TIPO_MENSAGEM,
           M.DATA_VALIDADE,
+          M.VARIAVEIS_WHATSAPP,
           TM.PRIORIDADE_ENVIO,
           PM.PERMITE,
           CP.WHATSAPP as ACEITA_WHATSAPP,

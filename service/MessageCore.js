@@ -12,23 +12,36 @@ const Constants = require("../logic/Constants");
 const ClientManager = require("../modules/Client/ClientManager");
 const CompanyService = require("../modules/Company/CompanyService");
 const MongoDB = require("../logic/MongoDB");
+const cron = require("node-cron");
 const BASE = "MessageCore:";
-var monitorIntervalEvent = null;
+var loggingTasks = null;
+var intervalCheckerTask = null;
 var queryInterval = null;
-var intervalEventChecker = null;
 
 /*
  * Functions
  */
 
 async function emptyQueue() {
-  let mongoClient = await MongoDB.getDatabase();
-  const database = mongoClient.db(MongoDB.dbName);
-  const collection = database.collection(
-    MessageUtils.getMessageCollectionName()
-  );
+  try {
+    let mongoClient = await MongoDB.getDatabase();
+    const database = mongoClient.db(MongoDB.dbName);
+    const collection = database.collection(
+      MessageUtils.getMessageCollectionName("WHATSAPP")
+    );
+    const collectionSms = database.collection(
+      MessageUtils.getMessageCollectionName("SMS")
+    );
 
-  return await collection.deleteMany({ CANAL: Constants.CHANNEL.awaiting });
+    await collection.deleteMany({ CODIGO_TIPO_MENSAGEM: { $ne: undefined } });
+    await collectionSms.deleteMany({
+      CODIGO_TIPO_MENSAGEM: { $ne: undefined },
+    });
+    return true;
+  } catch (err) {
+    console.log(err);
+    return false;
+  }
 }
 
 async function processBlockedMessages(blockedMessages) {
@@ -59,7 +72,7 @@ async function processSMSMessages(pendingSMSMessages) {
       let mongoClient = await MongoDB.getDatabase();
       const database = mongoClient.db(MongoDB.dbName);
       const collection = database.collection(
-        MessageUtils.getMessageCollectionName()
+        MessageUtils.getMessageCollectionName("SMS")
       );
 
       for (let i = 0; i < pendingSMSMessages.length; i++) {
@@ -89,7 +102,7 @@ async function processWhatsAppMessages(pendingWhatsAppMessages) {
       let mongoClient = await MongoDB.getDatabase();
       const database = mongoClient.db(MongoDB.dbName);
       const collection = database.collection(
-        MessageUtils.getMessageCollectionName()
+        MessageUtils.getMessageCollectionName("WHATSAPP")
       );
 
       for (let i = 0; i < pendingWhatsAppMessages.length; i++) {
@@ -129,19 +142,18 @@ async function initServiceCore() {
     if (global.queryIntervalEvent === null) {
       global.queryIntervalEvent = setInterval(
         fetchPendingMessages,
-        120000 //DEV
+        queryInterval
       );
       console.log(BASE + " Query event has been started");
     }
   }
 
-  if (monitorIntervalEvent === null) {
-    monitorIntervalEvent = setInterval(sendLogs, 3600000);
-  }
-
-  if (intervalEventChecker === null) {
-    intervalEventChecker = setInterval(checkEventInterval, 120000);
-  }
+  //Logs the amount of messages sent in one hour
+  loggingTasks = cron.schedule("0 * * * *", sendLogs);
+  loggingTasks.start();
+  //Check the interval parameter in database every 2 minutes
+  intervalCheckerTask = cron.schedule("*/10 * * * *", checkEventInterval);
+  intervalCheckerTask.start();
 
   console.log(BASE + " is running... [query:" + queryInterval + "]");
 }
@@ -151,50 +163,54 @@ async function initServiceCore() {
  */
 
 async function checkEventInterval() {
-  let currentQueryInterval = await MessageRepository.fetchQueryInterval();
-  let currentSendingInterval = await MessageRepository.fetchInterval();
+  try {
+    let currentQueryInterval = await MessageRepository.fetchQueryInterval();
+    let currentSendingInterval = await MessageRepository.fetchInterval();
 
-  if (
-    currentSendingInterval !== null &&
-    currentSendingInterval !== undefined &&
-    currentSendingInterval.length > 0 &&
-    (typeof currentSendingInterval[0] == "string" ||
-      typeof currentSendingInterval[0] == "number") &&
-    isNaN(parseFloat(currentSendingInterval[0])) == false
-  ) {
-    currentSendingInterval = parseFloat(currentSendingInterval[0]) * 1000.0;
+    if (
+      currentSendingInterval !== null &&
+      currentSendingInterval !== undefined &&
+      currentSendingInterval.length > 0 &&
+      (typeof currentSendingInterval[0] == "string" ||
+        typeof currentSendingInterval[0] == "number") &&
+      isNaN(parseFloat(currentSendingInterval[0])) == false
+    ) {
+      currentSendingInterval = parseFloat(currentSendingInterval[0]) * 1000.0;
 
-    if (currentSendingInterval !== WhatsAppScheduler.getIntervalCount()) {
-      WhatsAppScheduler.setIntervalCount(currentSendingInterval);
-      WhatsAppScheduler.stop();
-      console.clear();
-      console.log("Sending interval has changed, restarting service...");
-      WhatsAppScheduler.start();
+      if (currentSendingInterval !== WhatsAppScheduler.getIntervalCount()) {
+        console.log("Sending interval has changed, restarting service...");
+        WhatsAppScheduler.setIntervalCount(currentSendingInterval);
+        WhatsAppScheduler.stop();
+        console.clear();
+        WhatsAppScheduler.start();
+      }
     }
-  }
 
-  if (
-    currentQueryInterval !== null &&
-    currentQueryInterval !== undefined &&
-    currentQueryInterval.length > 0 &&
-    (typeof currentQueryInterval[0] == "string" ||
-      typeof currentQueryInterval[0] == "number") &&
-    isNaN(parseFloat(currentQueryInterval[0])) == false
-  ) {
-    currentQueryInterval = parseFloat(currentQueryInterval[0]) * 1000.0; //convert to milliseconds
+    if (
+      currentQueryInterval !== null &&
+      currentQueryInterval !== undefined &&
+      currentQueryInterval.length > 0 &&
+      (typeof currentQueryInterval[0] == "string" ||
+        typeof currentQueryInterval[0] == "number") &&
+      isNaN(parseFloat(currentQueryInterval[0])) == false
+    ) {
+      currentQueryInterval = parseFloat(currentQueryInterval[0]) * 1000.0; //convert to milliseconds
 
-    if (currentQueryInterval !== queryInterval) {
-      //restart the interval
-      queryInterval = currentQueryInterval;
-      clearInterval(global.queryIntervalEvent);
-      console.clear();
-      console.log("Query interval has changed, restarting service...");
-      global.queryIntervalEvent = setInterval(
-        fetchPendingMessages,
-        queryInterval
-      );
-      console.log("Done");
+      if (currentQueryInterval !== queryInterval) {
+        //restart the interval
+        queryInterval = currentQueryInterval;
+        clearInterval(global.queryIntervalEvent);
+        console.clear();
+        console.log("Query interval has changed, restarting service...");
+        global.queryIntervalEvent = setInterval(
+          fetchPendingMessages,
+          queryInterval
+        );
+        console.log("Done");
+      }
     }
+  } catch (err) {
+    console.log(err);
   }
 }
 
@@ -304,9 +320,9 @@ const MessageCore = {
     console.log("Trying to stop all message services...");
     //Stop all services
     clearInterval(global.queryIntervalEvent);
-    clearInterval(monitorIntervalEvent);
     global.queryIntervalEvent = null;
-    monitorIntervalEvent = null;
+    loggingTasks.stop();
+    intervalCheckerTask.stop();
     emptyQueue();
     WhatsAppScheduler.stop();
     SmsScheduler.stop();

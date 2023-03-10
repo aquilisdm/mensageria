@@ -6,7 +6,6 @@ const process = require("node:process");
 const EventEmitter = require("events");
 const cors = require("cors");
 const Utils = require("./logic/Utils");
-var cron = require("node-cron");
 global.clientMap = {};
 global.intervalEvent = null;
 global.queryIntervalEvent = null;
@@ -23,6 +22,7 @@ const UserController = require("./modules/User/UserController");
 const ConfigController = require("./modules/Config/ConfigController");
 const CompanyController = require("./modules/Company/CompanyController");
 const DataManager = require("./service/DataManager");
+const Cronjobs = require("./service/Cronjobs"); //will start automatically
 
 //Hermod
 
@@ -34,9 +34,10 @@ const DataManager = require("./service/DataManager");
 //https://support.huaweicloud.com/intl/en-us/devg-msgsms/sms_04_0008.html
 //https://support.huaweicloud.com/intl/en-us/usermanual-msgsms/sms_03_0011.html
 //https://developer.huawei.com/consumer/en/service/josp/agc/index.html#/unrealName
-  
+
 //https://developer.huawei.com/consumer/en/doc/start/api-0000001062522591
 //https://console-intl.huaweicloud.com/msgsms/?region=ap-southeast-1&locale=en-us#/msgsms/overview
+//https://support.huaweicloud.com/intl/en-us/devg-msgsms/sms_04_0009.html
 
 //Start server
 //pm2 start ecosystem.config.js
@@ -107,22 +108,6 @@ app.use("/wp-users", UserController);
 app.use("/wp-config", ConfigController);
 app.use("/wp-company", CompanyController);
 
-var task = cron.schedule( 
-  "0 24 * * *",
-  () => {
-    console.log("Running a job at 2:00 AM at America/Sao_Paulo timezone");
-    MessageCore.stop();
-    DataManager.stop();
-    Utils.callGC();
-    MessageCore.start();
-    DataManager.start();
-  },
-  {
-    scheduled: true,
-    timezone: "America/Sao_Paulo",
-  }
-);
-
 process.on("exit", (code) => {
   console.clear();
   console.log(`About to exit with code: ${code}`);
@@ -133,12 +118,12 @@ process.on("exit", (code) => {
   global.eventEmitter.removeAllListeners("queueMove");
   MessageCore.stop();
   DataManager.stop();
-  task.stop();
+  Cronjobs.stop();
 });
 
 app.listen(2000, function () {
   console.log("Starting server on", 2000);
   MessageCore.start();
   DataManager.start();
-  task.start();
+  Cronjobs.start();
 });

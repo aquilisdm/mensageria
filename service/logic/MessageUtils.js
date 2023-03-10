@@ -2,20 +2,29 @@ const ClientManager = require("../../modules/Client/ClientManager");
 const CompanyService = require("../../modules/Company/CompanyService");
 const MessageRepository = require("../../modules/Messages/MessageRepository");
 const Utils = require("../../logic/Utils");
+const Constants = require("../../logic/Constants");
 
 const MessageUtils = {
+  getMessageCollectionName: function (channel) {
+    if (channel === "WHATSAPP")
+      return process.env.NODE_ENV === Constants.PRODUCTION_ENV
+        ? "messages"
+        : "messages_dev";
+    else if (channel === "SMS")
+      return process.env.NODE_ENV === Constants.PRODUCTION_ENV
+        ? "messages_sms"
+        : "messages_dev_sms";
+    else return null;
+  },
   shouldSendSMS: async function () {
     try {
       let shouldSendSMS = await MessageRepository.fetchShouldSendSMS();
-
-      if (startTime.length > 0 && endTime.length > 0) {
-        return (
-          Array.isArray(shouldSendSMS) &&
-          shouldSendSMS.length > 0 &&
-          typeof shouldSendSMS[0] === "string" &&
-          shouldSendSMS[0].trim().toLowerCase() == "sim"
-        );
-      }
+      return (
+        Array.isArray(shouldSendSMS) &&
+        shouldSendSMS.length > 0 &&
+        typeof shouldSendSMS[0] === "string" &&
+        shouldSendSMS[0].trim().toLowerCase() == "sim"
+      );
     } catch (err) {
       console.log(err);
       return false;
@@ -86,7 +95,7 @@ const MessageUtils = {
     }
 
     return undefined;
-  }
+  },
 };
 
 module.exports = MessageUtils;

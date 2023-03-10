@@ -1,4 +1,18 @@
 const Utils = {
+  containsOnlyNumbers:function(str) {
+    return /^[0-9]+$/.test(str);
+  },
+  startIndexOfText:function(str,text) {
+    let exp = new RegExp(/[#]\w.+/g);
+    let result = 0;
+
+    while (match = exp.exec(str)) {
+      console.log(match.index + ' ' + exp.lastIndex);
+      result = match.index;
+    }
+
+    return result;
+  },
   callGC: function () {
     //This function should be used too often, it will pause your
     //node app until the GC completes.

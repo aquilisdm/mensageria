@@ -15,7 +15,8 @@ var intervalCount = null;
  * Events
  */
 
-async function processQueueOne() {
+async function processQueueDevelopment() {
+  //DEVELOPMENT FUNCTION NOT AVAILABLE IN PRODUCTION
   var mongoClient = await MongoDB.getDatabase().catch((err) => {
     console.log(err);
   });
@@ -24,14 +25,13 @@ async function processQueueOne() {
     if ((await MessageUtils.shouldSendWhatsApp()) && mongoClient !== null) {
       const database = mongoClient.db(MongoDB.dbName);
       const collection = database.collection(
-        MessageUtils.getMessageCollectionName()
+        MessageUtils.getMessageCollectionName("WHATSAPP")
       );
 
       var pendingMessage = await collection.findOneAndDelete(
-        {},
+        { CODIGO_TIPO_MENSAGEM: { $ne: 3 }, CODIGO_TIPO_MENSAGEM: { $ne: 0 } }, //Message type 3 is sms only and 0 should not be sent
         { sort: { _id: 1 } }
       );
-
       pendingMessage =
         pendingMessage !== null &&
         pendingMessage !== undefined &&
@@ -46,6 +46,115 @@ async function processQueueOne() {
         if (pendingMessage.ACEITA_WHATSAPP === "SIM") {
           if (
             pendingMessage.CODIGO_TIPO_MENSAGEM == 1 &&
+            pendingMessage.ACEITA_PROMOCOES === "NÃO"
+          ) {
+            console.log("[DEV] Cliente não aceita promoções");
+            return;
+          }
+
+          let allCompanyDevices = await MessageUtils.fetchAllCompanyDevices();
+          let companyCode = !Utils.isEmpty(pendingMessage.CODIGO_EMPRESA)
+            ? pendingMessage.CODIGO_EMPRESA
+            : 1;
+
+          if (
+            Array.isArray(allCompanyDevices[companyCode]) &&
+            allCompanyDevices[companyCode].length > 0
+          ) {
+            console.log(
+              "[DEV] Sending message with code: " +
+                pendingMessage.CODIGO_MENSAGEM
+            );
+            //Send messages
+            formattedNumber = Utils.formatNumber("31996934484");
+            device = MessageUtils.selectSeqDevice(
+              allCompanyDevices[companyCode]
+            );
+            var LocalStorage = require("node-localstorage").LocalStorage;
+            localStorage = new LocalStorage("./dev");
+            currentClientId = localStorage.getItem("DEV_DEVICE_ID");
+
+            if (
+              formattedNumber !== null &&
+              currentClientId !== undefined &&
+              currentClientId !== null
+            ) {
+              response = await MessageService.sendWhatsAppMessage(
+                currentClientId,
+                formattedNumber,
+                Utils.formatUnicodeToEmojisInText(pendingMessage.WHATSAPP)
+              ).catch((err) => {
+                response = {
+                  success: false,
+                  message: err,
+                };
+              });
+            } else
+              response = {
+                success: false,
+                message: "The phone number or the clientId is invalid",
+              };
+
+            if (response.success === false) {
+              console.log(
+                "[DEV] Message with code: " +
+                  pendingMessage.CODIGO_MENSAGEM +
+                  " failed"
+              );
+            } else if (response.success === true) {
+              console.log(
+                "[DEV] Message with code " +
+                  pendingMessage.CODIGO_MENSAGEM +
+                  " was sent successfully"
+              );
+            }
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.log(err);
+    Logger.error(err, "WhatsAppScheduler.processQueue()", {});
+  } finally {
+    mongoClient.close();
+  }
+}
+
+async function processQueueOne() {
+  var mongoClient = await MongoDB.getDatabase().catch((err) => {
+    console.log(err);
+  });
+
+  var currentClientId = null;
+  var formattedNumber = null;
+  var device = null;
+  var pendingMessage = null;
+  var allCompanyDevices = null;
+  var companyCode = null;
+
+  try {
+    if ((await MessageUtils.shouldSendWhatsApp()) && mongoClient !== null) {
+      const database = mongoClient.db(MongoDB.dbName);
+      const collection = database.collection(
+        MessageUtils.getMessageCollectionName("WHATSAPP")
+      );
+
+      pendingMessage = await collection.findOneAndDelete(
+        {},
+        { sort: { _id: 1 } }
+      );
+
+      pendingMessage =
+        pendingMessage !== null &&
+        pendingMessage !== undefined &&
+        typeof pendingMessage === "object"
+          ? pendingMessage.value
+          : null;
+
+      if (pendingMessage !== null && pendingMessage !== undefined) {
+        if (pendingMessage.ACEITA_WHATSAPP === "SIM") {
+          if (
+            pendingMessage.CODIGO_TIPO_MENSAGEM == 1 && //CODIGO_TIPO_MENSAGEM == 1 Marketing
             pendingMessage.ACEITA_PROMOCOES.trim() !== "SIM" // == NÃO
           ) {
             MessageRepository.updateMessageStatus(
@@ -57,8 +166,8 @@ async function processQueueOne() {
             return;
           }
 
-          let allCompanyDevices = await MessageUtils.fetchAllCompanyDevices();
-          let companyCode = !Utils.isEmpty(pendingMessage.CODIGO_EMPRESA)
+          allCompanyDevices = await MessageUtils.fetchAllCompanyDevices();
+          companyCode = !Utils.isEmpty(pendingMessage.CODIGO_EMPRESA)
             ? pendingMessage.CODIGO_EMPRESA
             : 1;
 
@@ -95,80 +204,83 @@ async function processQueueOne() {
                 ? device.clientId
                 : undefined;
 
-            if (
-              formattedNumber !== null &&
-              currentClientId !== undefined &&
-              currentClientId !== null
-            ) {
-              console.log(
-                "Sending message with code: " + pendingMessage.CODIGO_MENSAGEM
-              );
-              response = await MessageService.sendWhatsAppMessage(
-                currentClientId,
-                formattedNumber,
-                Utils.formatUnicodeToEmojisInText(pendingMessage.WHATSAPP)
-              ).catch((err) => {
+            if (formattedNumber !== null) {
+              if (currentClientId !== undefined && currentClientId !== null) {
+                console.log(
+                  "Sending message with code: " + pendingMessage.CODIGO_MENSAGEM
+                );
+                response = await MessageService.sendWhatsAppMessage(
+                  currentClientId,
+                  formattedNumber,
+                  Utils.formatUnicodeToEmojisInText(pendingMessage.WHATSAPP)
+                ).catch((err) => {
+                  response = {
+                    success: false,
+                    message: err,
+                  };
+                });
+              } else if (
+                (currentClientId == null || currentClientId == undefined) &&
+                pendingMessage.CODIGO_TIPO_MENSAGEM == 1
+              ) {
+                throw new Error({
+                  name: "Error",
+                  message:
+                    "Client Id is null for message: " +
+                    pendingMessage.CODIGO_MENSAGEM,
+                });
+              } else
                 response = {
                   success: false,
-                  message: err,
+                  message: "The clientId is invalid",
                 };
-              });
-            } else if (
-              formattedNumber !== null &&
-              (currentClientId == null || currentClientId == undefined) &&
-              pendingMessage.CODIGO_TIPO_MENSAGEM == 1
-            ) {
-              console.log(
-                "Client Id is null for message: " +
-                  pendingMessage.CODIGO_MENSAGEM
-              );
-              return;
-            } else
+            } else {
               response = {
                 success: false,
-                message: "The phone number or the clientId is invalid",
+                message: "The phone number is invalid.",
               };
 
-            if (response.success === false) {
-              console.log(
-                "Message with code: " +
-                  pendingMessage.CODIGO_MENSAGEM +
-                  " failed"
-              );
-              MessageRepository.updateMessageStatus(
-                pendingMessage.CODIGO_MENSAGEM,
-                Constants.CHANNEL.failed,
-                device !== undefined && device !== null ? device.number : null
-              );
+              pendingMessage.ACEITA_SMS = "NÃO";
+            }
 
-              Logger.error(
-                response.message,
-                "WhatsAppScheduler.processQueue()",
-                {
-                  senderNumber:
-                    device !== undefined && device !== null
-                      ? device.number
-                      : undefined,
-                  targetNumber: Utils.isEmpty(pendingMessage.CELULAR)
-                    ? undefined
-                    : pendingMessage.CELULAR.trim(),
-                  formattedTargetNumber: formattedNumber,
-                  clientId: currentClientId,
-                  messageId: pendingMessage.CODIGO_MENSAGEM,
-                  validTil: Utils.isDate(new Date(pendingMessage.DATA_VALIDADE))
-                    ? new Date(pendingMessage.DATA_VALIDADE)
-                    : pendingMessage.DATA_VALIDADE,
-                  messageRegisterDate: pendingMessage.DATA_CADASTRO,
-                  messageTypeCode: pendingMessage.CODIGO_TIPO_MENSAGEM,
-                  deviceArrayLength: Array.isArray(
-                    allCompanyDevices[companyCode]
-                  )
-                    ? allCompanyDevices[companyCode].length
-                    : null,
-                  pendingMessageCompany: pendingMessage.CODIGO_EMPRESA,
-                  status: "failed",
-                }
-              );
+            if (response.success === false) {
+              if (
+                (await MessageUtils.shouldSendSMS()) == true &&
+                pendingMessage.ACEITA_SMS.trim() !== "SIM" &&
+                pendingMessage.CODIGO_TIPO_MENSAGEM != 1 &&
+                pendingMessage.CODIGO_TIPO_MENSAGEM != 2
+              ) {
+                console.log(
+                  "Message with code: " +
+                    pendingMessage.CODIGO_MENSAGEM +
+                    " failed"
+                );
+                MessageRepository.updateMessageStatus(
+                  pendingMessage.CODIGO_MENSAGEM,
+                  Constants.CHANNEL.failed,
+                  device !== undefined && device !== null ? device.number : null
+                );
+                throw new Error({ name: "Error", message: response.message });
+              } else if ((await MessageUtils.shouldSendSMS()) == false) {
+                console.log(
+                  "Message with code: " +
+                    pendingMessage.CODIGO_MENSAGEM +
+                    " failed and SMS is currently disabled..."
+                );
+                MessageRepository.updateMessageStatus(
+                  pendingMessage.CODIGO_MENSAGEM,
+                  Constants.CHANNEL.failed,
+                  device !== undefined && device !== null ? device.number : null
+                );
+                throw new Error({ name: "Error", message: response.message });
+              } else {
+                console.log(
+                  "Another attempt with message " +
+                    pendingMessage.CODIGO_MENSAGEM +
+                    " will made via text message (sms)"
+                );
+                return; //Another attempt will be made via text message (sms)
+              }
             } else if (response.success === true) {
               console.log(
                 "Message with code " +
@@ -180,14 +292,37 @@ async function processQueueOne() {
                 Constants.CHANNEL.sentViaWhatsApp,
                 device !== undefined && device !== null ? device.number : null
               );
-            }
+            } else
+              throw new Error({
+                name: "Error",
+                message: "response.success is undefined",
+              });
           }
         }
       }
     }
   } catch (err) {
-    console.log(err);
-    Logger.error(err, "WhatsAppScheduler.processQueue()", {});
+    console.log(JSON.stringify(err));
+    Logger.error(err.message, "WhatsAppScheduler.processQueue()", {
+      senderNumber:
+        device !== undefined && device !== null ? device.number : undefined,
+      targetNumber: Utils.isEmpty(pendingMessage.CELULAR)
+        ? undefined
+        : pendingMessage.CELULAR.trim(),
+      formattedTargetNumber: formattedNumber,
+      clientId: currentClientId,
+      messageId: pendingMessage.CODIGO_MENSAGEM,
+      validTil: Utils.isDate(new Date(pendingMessage.DATA_VALIDADE))
+        ? new Date(pendingMessage.DATA_VALIDADE)
+        : pendingMessage.DATA_VALIDADE,
+      messageRegisterDate: pendingMessage.DATA_CADASTRO,
+      messageTypeCode: pendingMessage.CODIGO_TIPO_MENSAGEM,
+      deviceArrayLength: Array.isArray(allCompanyDevices[companyCode])
+        ? allCompanyDevices[companyCode].length
+        : null,
+      pendingMessageCompany: pendingMessage.CODIGO_EMPRESA,
+      status: "failed",
+    });
   } finally {
     mongoClient.close();
   }

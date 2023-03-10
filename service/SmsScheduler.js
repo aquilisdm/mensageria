@@ -5,6 +5,7 @@ const Utils = require("../logic/Utils");
 const Constants = require("../logic/Constants");
 const https = require("https");
 const url = require("url");
+const MongoDB = require("../logic/MongoDB");
 const crypto = require("crypto");
 const util = require("util");
 const querystring = require("querystring");
@@ -70,6 +71,76 @@ function extractTemplateParamsFromRawText(text, messageType) {
   }
 
   return ["", ""];
+}
+
+function extractVariableNames(text) {
+  let names = [];
+  if (text) {
+    let result = text.trim().split(";");
+    result.forEach((element) => {
+      if (!Utils.isEmpty(element)) {
+        let nameAndValue = element.trim().split("=");
+        if (Array.isArray(nameAndValue)) names.push(nameAndValue[0]); //NAME
+      }
+    });
+  }
+
+  return names;
+}
+
+function extractVariableValues(text) {
+  let values = [];
+  if (text) {
+    let result = text.trim().split(";");
+    result.forEach((element) => {
+      if (!Utils.isEmpty(element)) {
+        let nameAndValue = element.trim().split("=");
+        if (Array.isArray(nameAndValue)) values.push(nameAndValue[1]); //VALUE
+      }
+    });
+  }
+
+  return values;
+}
+
+async function mapTemplateParams(messageTypeCode, variables) {
+  //var model = #EXAMPLE, #EXAMPLE2 (in text)
+  //var model = #CODIGO_PEDIDO=10592110;#NOME_CONTATO=NATHALIE;
+  let result = await MessageRepository.fetchMessageModelByMessageTypeCode(
+    messageTypeCode
+  );
+  let mapped = [];
+  let resultMapped = [];
+
+  let variableNames = extractVariableNames(variables);
+  let variableValues = extractVariableValues(variables);
+
+  if (
+    Array.isArray(result) &&
+    result.length > 0 &&
+    Array.isArray(variableNames) &&
+    variableNames.length > 0
+  ) {
+    console.log(result[0].MODELO_SMS);
+    for (let i = 0; i < variableNames.length; i++) {
+      let index = result[0].MODELO_SMS.indexOf(variableNames[i]);
+      mapped.push({
+        name: variableNames[i],
+        index: index,
+        value: variableValues[i],
+      });
+    }
+
+    mapped = mapped.sort((x, y) => {
+      return x.index - y.index;
+    });
+
+    mapped.forEach((element) => {
+      resultMapped.push(element.value);
+    });
+  }
+
+  return resultMapped;
 }
 
 function initDiffSms(receiver, templateId, templateParas, signature) {
@@ -204,11 +275,7 @@ function sendSMS(receiver, templateId, templateParams) {
           {"result":[{"originTo":"+5531996934484","createTime":"2023-03-02T12:16:10Z","from":"smsapp0000000259","smsMsgId":"98c7a3f6-b1b2-4dd7-9ce7-6b8ba0e2c269_3266164","status":"000000"}],"code":"000000","description":"Success"}
           */
 
-          if (
-            res.statusCode == 200 &&
-            d !== null &&
-            d.description === "Success"
-          ) {
+          if (res.statusCode == 200) {
             resolve({ success: true, responseMessage: d });
           } else resolve({ success: false, responseMessage: d });
         });
@@ -259,18 +326,24 @@ function buildRequestBody(
 /*
  * Events
  */
-async function processQueue() {
-  var mongoClient = await MongoDB.getDatabase().catch((err) => {});
+
+async function processQueueDevelopment() {
+  var mongoClient = await MongoDB.getDatabase().catch((err) => {
+    console.log(err);
+  });
+
+  var formattedNumber = null;
+  var pendingMessage = null;
 
   try {
-    if ((await MessageUtils.shouldSendSMS()) && mongoClient !== null) {
+    if (mongoClient !== null) {
       const database = mongoClient.db(MongoDB.dbName);
       const collection = database.collection(
-        MessageUtils.getMessageCollectionName()
+        MessageUtils.getMessageCollectionName("SMS")
       );
 
-      let pendingMessage = await collection.findOneAndDelete(
-        {},
+      pendingMessage = await collection.findOneAndDelete(
+        { CODIGO_TIPO_MENSAGEM: { $ne: 0 } },
         { sort: { _id: 1 } }
       );
       pendingMessage =
@@ -280,7 +353,154 @@ async function processQueue() {
           ? pendingMessage.value
           : null;
 
-      let formattedNumber = null;
+      if (pendingMessage !== null && pendingMessage !== undefined) {
+        if (
+          pendingMessage.ACEITA_SMS !== undefined &&
+          pendingMessage.ACEITA_SMS === "SIM"
+        ) {
+          if (
+            pendingMessage.CODIGO_TIPO_MENSAGEM == 1 &&
+            pendingMessage.ACEITA_PROMOCOES === "NÃO"
+          ) {
+            console.log(
+              pendingMessage.CODIGO_MENSAGEM + " não aceita marketing..."
+            );
+            return;
+          }
+
+          //Send messages
+          formattedNumber = Utils.formatNumber(pendingMessage.CELULAR);
+
+          if ("+5531996934484" !== null) {
+            if (
+              pendingMessage.TEMPLATE_SMS_HUAWEI !== undefined &&
+              pendingMessage.TEMPLATE_SMS_HUAWEI !== null
+            ) {
+              console.log(
+                "[DEV] Sending SMS with code " + pendingMessage.CODIGO_MENSAGEM
+              );
+              console.log("Template ID: " + pendingMessage.TEMPLATE_SMS_HUAWEI);
+              console.log(
+                "Message Type: " + pendingMessage.CODIGO_TIPO_MENSAGEM
+              );
+              console.log(
+                "Params: ",
+                await mapTemplateParams(
+                  pendingMessage.CODIGO_TIPO_MENSAGEM,
+                  pendingMessage.VARIAVEIS_SMS
+                )
+              );
+
+              //response = {success:true};
+
+              response = await sendSMS(
+                "+553175961114",
+                pendingMessage.TEMPLATE_SMS_HUAWEI,
+                await mapTemplateParams(
+                  pendingMessage.CODIGO_TIPO_MENSAGEM,
+                  pendingMessage.VARIAVEIS_SMS
+                )
+              ).catch((err) => {
+                console.log(err);
+              });
+
+              if (response.success === false) {
+                console.log(
+                  "[DEV] Failed to send sms via Huawei Platform, trying to send by INFOQUALY..."
+                );
+                console.log("INFOQUALY is not available yet...");
+                //response = await sendSMSInfo(formattedNumber,pendingMessage.SMS);
+              }
+            } else
+              response = {
+                success: false,
+                message: "Template was not available",
+              };
+          } else {
+            response = {
+              success: false,
+              message: "The phone number is invalid.",
+            };
+
+            pendingMessage.ACEITA_WHATSAPP = "NÃO";
+          }
+
+          if (response.success === false) {
+            if (pendingMessage.ACEITA_WHATSAPP.trim() !== "SIM") {
+              //NÃO
+              console.log(
+                "[DEV] SMS with code: " +
+                  pendingMessage.CODIGO_MENSAGEM +
+                  " failed"
+              );
+              throw new Error({ name: "Error", message: response.message });
+            } else {
+              console.log(
+                "Another attempt with message " +
+                  pendingMessage.CODIGO_MENSAGEM +
+                  " will be made via whatsapp"
+              );
+              console.log(response.message);
+              return; //Another attempt will be made via whatsapp
+            }
+          } else if (response.success === true) {
+            console.log(
+              "[DEV] SMS with code: " +
+                pendingMessage.CODIGO_MENSAGEM +
+                " was sent successfully"
+            );
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.log(err);
+    Logger.error(err.message, "SmsScheduler.processQueue()", {
+      targetNumber: Utils.isEmpty(pendingMessage.CELULAR)
+        ? undefined
+        : pendingMessage.CELULAR.trim(),
+      formattedTargetNumber: formattedNumber,
+      messageId: pendingMessage.CODIGO_MENSAGEM,
+      validTil: Utils.isDate(new Date(pendingMessage.DATA_VALIDADE))
+        ? new Date(pendingMessage.DATA_VALIDADE)
+        : pendingMessage.DATA_VALIDADE,
+      messageRegisterDate: pendingMessage.DATA_CADASTRO,
+      messageTypeCode: pendingMessage.CODIGO_TIPO_MENSAGEM,
+      apiResponse: response.responseMessage,
+      templateVariables: pendingMessage.VARIAVEIS,
+      status: "failed",
+    });
+  } finally {
+    mongoClient.close();
+  }
+}
+
+async function processQueue() {
+  var mongoClient = await MongoDB.getDatabase().catch((err) => {
+    console.log(err);
+  });
+
+  var formattedNumber = null;
+  var pendingMessage = null;
+
+  try {
+    if ((await MessageUtils.shouldSendSMS()) && mongoClient !== null) {
+      const database = mongoClient.db(MongoDB.dbName);
+      const collection = database.collection(
+        MessageUtils.getMessageCollectionName("SMS")
+      );
+
+      pendingMessage = await collection.findOneAndDelete(
+        { CODIGO_TIPO_MENSAGEM: { $ne: 0 } },
+        { sort: { _id: 1 } }
+      );
+      pendingMessage =
+        pendingMessage !== null &&
+        pendingMessage !== undefined &&
+        typeof pendingMessage === "object"
+          ? pendingMessage.value
+          : null;
+
       if (pendingMessage !== null && pendingMessage !== undefined) {
         if (
           pendingMessage.ACEITA_SMS !== undefined &&
@@ -305,87 +525,75 @@ async function processQueue() {
           if (formattedNumber !== null) {
             if (
               pendingMessage.TEMPLATE_SMS_HUAWEI !== undefined &&
-              pendingMessage.TEMPLATE_SMS_HUAWEI !== null &&
-              pendingMessage.VARIAVEIS !== undefined
+              pendingMessage.TEMPLATE_SMS_HUAWEI !== null
             ) {
+              console.log(
+                "Sending SMS with code " + pendingMessage.CODIGO_MENSAGEM
+              );
               response = await sendSMS(
                 "+" + formattedNumber,
                 pendingMessage.TEMPLATE_SMS_HUAWEI,
-                getTemplateParams(pendingMessage.VARIAVEIS) //extractTemplateParamsFromRawText(pendingMessage.SMS,pendingMessage.NOME_TIPO_MENSAGEM)
+                await mapTemplateParams(
+                  pendingMessage.CODIGO_TIPO_MENSAGEM,
+                  pendingMessage.VARIAVEIS_SMS
+                )
               ).catch((err) => {
                 console.log(err);
               });
-
-              if (response.success === false) {
-                console.log(
-                  "Failed to send sms via Huawei Platform, trying to send by INFOQUALY..."
-                );
-                //response = await sendSMSInfo(formattedNumber,pendingMessage.SMS);
-              }
             } else
               response = {
                 success: false,
                 message: "Template was not available",
               };
-          } else
+          } else {
             response = {
               success: false,
-              message:
-                "The phone number is invalid or template params are not available.",
+              message: "The phone number is invalid.",
             };
+          }
 
           if (response.success === false) {
+            console.log(
+              "SMS with code: " + pendingMessage.CODIGO_MENSAGEM + " failed"
+            );
             MessageRepository.updateMessageStatus(
               pendingMessage.CODIGO_MENSAGEM,
               Constants.CHANNEL.failed,
               device !== undefined && device !== null ? device.number : null
             );
-
-            Logger.error(response.message, "SmsScheduler.processQueue()", {
-              targetNumber: Utils.isEmpty(pendingMessage.CELULAR)
-                ? undefined
-                : pendingMessage.CELULAR.trim(),
-              formattedTargetNumber: formattedNumber,
-              messageId: pendingMessage.CODIGO_MENSAGEM,
-              validTil: Utils.isDate(new Date(pendingMessage.DATA_VALIDADE))
-                ? new Date(pendingMessage.DATA_VALIDADE)
-                : pendingMessage.DATA_VALIDADE,
-              messageRegisterDate: pendingMessage.DATA_CADASTRO,
-              messageTypeCode: pendingMessage.CODIGO_TIPO_MENSAGEM,
-              apiResponse: response.responseMessage,
-              templateVariables: pendingMessage.VARIAVEIS,
-              status: "failed",
-            });
-          } else {
+            throw new Error({ name: "Error", message: response.message });
+          } else if (response.success === true) {
+            console.log(
+              "SMS with code: " +
+                pendingMessage.CODIGO_MENSAGEM +
+                " was sent successfully"
+            );
             MessageRepository.updateMessageStatus(
               pendingMessage.CODIGO_MENSAGEM,
               Constants.CHANNEL.sentViaSMS,
-              "huawei"
+              "HUAWEI"
             );
-
-            Logger.info(pendingMessage.SMS, "SmsScheduler.processQueue()", {
-              targetNumber: Utils.isEmpty(pendingMessage.CELULAR)
-                ? undefined
-                : pendingMessage.CELULAR.trim(),
-              formattedTargetNumber: formattedNumber,
-              messageId: pendingMessage.CODIGO_MENSAGEM,
-              validTil: Utils.isDate(new Date(pendingMessage.DATA_VALIDADE))
-                ? new Date(pendingMessage.DATA_VALIDADE)
-                : pendingMessage.DATA_VALIDADE,
-              messageRegisterDate: pendingMessage.DATA_CADASTRO,
-              messageTypeCode: pendingMessage.CODIGO_TIPO_MENSAGEM,
-              pendingMessageCompany: pendingMessage.CODIGO_EMPRESA,
-              apiResponse: response.responseMessage,
-              templateVariables: pendingMessage.VARIAVEIS,
-              status: "success",
-            });
           }
         }
       }
     }
   } catch (err) {
     console.log(err);
-    Logger.error(err, "SmsScheduler.processQueue()", {});
+    Logger.error(err.message, "SmsScheduler.processQueue()", {
+      targetNumber: Utils.isEmpty(pendingMessage.CELULAR)
+        ? undefined
+        : pendingMessage.CELULAR.trim(),
+      formattedTargetNumber: formattedNumber,
+      messageId: pendingMessage.CODIGO_MENSAGEM,
+      validTil: Utils.isDate(new Date(pendingMessage.DATA_VALIDADE))
+        ? new Date(pendingMessage.DATA_VALIDADE)
+        : pendingMessage.DATA_VALIDADE,
+      messageRegisterDate: pendingMessage.DATA_CADASTRO,
+      messageTypeCode: pendingMessage.CODIGO_TIPO_MENSAGEM,
+      apiResponse: response.responseMessage,
+      templateVariables: pendingMessage.VARIAVEIS,
+      status: "failed",
+    });
   } finally {
     mongoClient.close();
   }
@@ -430,6 +638,17 @@ const SmsScheduler = {
       }
 
       console.log(BASE + "Scheduler is running..." + intervalCount + "]");
+    } else if (process.env.NODE_ENV === Constants.DEVELOPMENT_ENV) {
+      if (global.smsIntervalEvent === null) {
+        global.smsIntervalEvent = setInterval(processQueueDevelopment, 12000);
+        console.log(BASE + " Message interval event has been started");
+      } else {
+        clearInterval(global.smsIntervalEvent);
+        global.smsIntervalEvent = setInterval(processQueueDevelopment, 12000);
+        console.log(BASE + " Message interval event has been re-started");
+      }
+
+      console.log(BASE + "[DEV] Scheduler is running..." + intervalCount + "]");
     }
   },
   stop: function () {

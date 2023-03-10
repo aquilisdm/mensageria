@@ -7,7 +7,7 @@ module.exports = {
     instances : "2",
     exec_mode  : "cluster",
     //cron_restart: "5/120 * * * *",
-    max_memory_restart: "850M",
+    max_memory_restart: "780M",
     node_args : "--harmony --expose-gc"
   }]
 }
