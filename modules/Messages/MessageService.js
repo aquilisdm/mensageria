@@ -6,6 +6,7 @@ const ClientManager = require("../Client/ClientManager");
 const EventEmitter = require("events");
 const eventEmitter = new EventEmitter();
 const Utils = require("../../logic/Utils");
+const Constants = require("../../logic/Constants");
 eventEmitter.setMaxListeners(120);
 
 eventEmitter.on("newClient", async function (clientId, userId) {
@@ -295,23 +296,30 @@ const MessageService = {
         const uniqueRandomID = uuidv4().replaceAll("-", "");
 
         const client = ClientManager.createClientSession(uniqueRandomID);
-
+        
         client.on("qr", (qr) => {
           //Just in development
-          //qrcode.generate(qr, { small: true });
+          if (process.env.NODE_ENV === Constants.DEVELOPMENT_ENV) {
+            qrcode.generate(qr, { small: true });
+          }
+
           callback({ qr: qr, clientId: uniqueRandomID, ready: false });
         });
 
         client.on("ready", async () => {
-          //console.log("Client is ready!");
-          console.log("ID: " + uniqueRandomID);
-
-          await ClientManager.setClientId(
-            uniqueRandomID,
-            client.info !== undefined ? client.info : {},
-            userId,
-            ip
-          );
+          
+          if (process.env.NODE_ENV == Constants.PRODUCTION_ENV) {
+            await ClientManager.setClientId(
+              uniqueRandomID,
+              client.info !== undefined ? client.info : {},
+              userId,
+              ip
+            );
+          } else {
+            var LocalStorage = require('node-localstorage').LocalStorage;
+            localStorage = new LocalStorage('./dev');
+            localStorage.setItem("DEV_DEVICE_ID",uniqueRandomID);
+          }
 
           //Save the connection
           global.clientMap[uniqueRandomID] = client;

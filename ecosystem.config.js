@@ -4,10 +4,10 @@ module.exports = {
     script : "./index.js",
     autorestart:true,
     watch: false,
-    //instances : "max",
-    exec_mode  : "fork",
-    cron_restart: "5/120 * * * *",
-    max_memory_restart: "500M",
-    //node_args : "--harmony"
+    instances : "2",
+    exec_mode  : "cluster",
+    //cron_restart: "5/120 * * * *",
+    max_memory_restart: "780M",
+    node_args : "--harmony --expose-gc"
   }]
 }

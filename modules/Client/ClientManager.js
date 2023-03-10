@@ -249,7 +249,7 @@ const ClientManager = {
     const client = new Client({
       puppeteer: {
         args: [
-	        "--no-sandbox",
+          "--no-sandbox",
           "--disable-setuid-sandbox",
           "--disable-dev-shm-usage",
           "--disable-accelerated-2d-canvas",

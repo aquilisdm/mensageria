@@ -7,19 +7,13 @@ const EventEmitter = require("events");
 const cors = require("cors");
 const Utils = require("./logic/Utils");
 global.clientMap = {};
-global.scheduledQueue = [];
-global.smsScheduledQueue = [];
 global.intervalEvent = null;
 global.queryIntervalEvent = null;
 global.smsIntervalEvent = null;
-global.smsQueryIntervalEvent = null;
-global.eventSessionInfo = {
-  intervalEventTime: undefined,
-  queryEventTime: undefined,
-};
 global.eventEmitter = new EventEmitter();
 global.eventEmitter.setMaxListeners(500);
 global.lastDeviceIndex = 0;
+global.lastMarketingDeviceIndex = 0;
 
 const MessagesController = require("./modules/Messages/MessagesController");
 const MessageCore = require("./service/MessageCore");
@@ -28,14 +22,22 @@ const UserController = require("./modules/User/UserController");
 const ConfigController = require("./modules/Config/ConfigController");
 const CompanyController = require("./modules/Company/CompanyController");
 const DataManager = require("./service/DataManager");
+const Cronjobs = require("./service/Cronjobs"); //will start automatically
 
 //Hermod
+
+//node version 16.x.x
+
+//SMS Console
+//https://www.huaweicloud.com/intl/en-us/product/msgsms.html
+
 //https://support.huaweicloud.com/intl/en-us/devg-msgsms/sms_04_0008.html
 //https://support.huaweicloud.com/intl/en-us/usermanual-msgsms/sms_03_0011.html
 //https://developer.huawei.com/consumer/en/service/josp/agc/index.html#/unrealName
 
 //https://developer.huawei.com/consumer/en/doc/start/api-0000001062522591
 //https://console-intl.huaweicloud.com/msgsms/?region=ap-southeast-1&locale=en-us#/msgsms/overview
+//https://support.huaweicloud.com/intl/en-us/devg-msgsms/sms_04_0009.html
 
 //Start server
 //pm2 start ecosystem.config.js
@@ -114,13 +116,14 @@ process.on("exit", (code) => {
   global.eventEmitter.removeAllListeners("addMessage");
   global.eventEmitter.removeAllListeners("removeMessage");
   global.eventEmitter.removeAllListeners("queueMove");
-  global.scheduledQueue = [];
   MessageCore.stop();
   DataManager.stop();
+  Cronjobs.stop();
 });
 
 app.listen(2000, function () {
   console.log("Starting server on", 2000);
   MessageCore.start();
   DataManager.start();
+  Cronjobs.start();
 });

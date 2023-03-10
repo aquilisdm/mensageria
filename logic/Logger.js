@@ -13,7 +13,7 @@ const Logger = {
             level: "error",
             message: err,
             endpoint: location,
-            date: Utils.convertTZ(new Date(), "America/Sao_Paulo").toString(),
+            date: Utils.convertTZ(new Date(), "America/Sao_Paulo"),
             additionalDetails:
               additionalDetails !== undefined ? additionalDetails : {},
           });
@@ -38,7 +38,7 @@ const Logger = {
             level: "info",
             message: info,
             endpoint: location,
-            date: Utils.convertTZ(new Date(), "America/Sao_Paulo").toString(),
+            date: Utils.convertTZ(new Date(), "America/Sao_Paulo"),
             additionalDetails:
               additionalDetails !== undefined ? additionalDetails : {},
           });
